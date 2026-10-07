@@ -64,8 +64,11 @@ jobs:
       - name: Smoke test the image
         run: |
           echo "Running the released image to verify it actually works..."
-          docker run --rm ${{ env.IMAGE_NAME }}:${{ needs.package.outputs.image-tag }} \
-            python -c "from app.calculator import add, divide; assert add(10,5)==15; assert divide(10,5)==2; print('smoke test OK')"
+          timeout 60 docker run --rm --entrypoint python \
+            ${{ env.IMAGE_NAME }}:${{ needs.package.outputs.image-tag }} \
+            -c "from app.calculator import add, divide; assert add(10,5)==15; assert divide(10,5)==2; print('smoke test OK')"
+          echo "Verifying the image exits cleanly without a TTY (no input() spin):"
+          timeout 60 docker run --rm -i ${{ env.IMAGE_NAME }}:${{ needs.package.outputs.image-tag }} < /dev/null
       - name: Deploy
         run: |
           echo "Deploying ${{ env.IMAGE_NAME }}:${{ needs.package.outputs.image-tag }} to STAGING"

@@ -22,4 +22,7 @@ USER appuser
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
   CMD python -c "from app.calculator import add; assert add(1,1)==2" || exit 1
-ENTRYPOINT ["python", "-m", "app.calculator"]
+# CMD, not ENTRYPOINT: with ENTRYPOINT, `docker run <image> python -c ...` APPENDS
+# the arguments instead of replacing them, so the interactive calculator starts
+# anyway. CMD is overridden cleanly, which is what smoke tests and debugging need.
+CMD ["python", "-m", "app.calculator"]

@@ -224,9 +224,20 @@ path: /
 --------------------------------
 ENVIRONMENT: production
 LOG_LEVEL: INFO
+PORT: 8080
+DEFAULT_CURRENCY: INR
+MAX_BOOKING_DAYS: 90
 POSTGRES_USER: yatri_admin
-POSTGRES_PASSWORD: secretpassword
+POSTGRES_PASSWORD: <set, 14 chars>
 ```
+
+> **The backend reports the secret by presence, never by value.** Echoing a
+> credential in an HTTP response is a real vulnerability — it leaks through the
+> ingress, reverse-proxy access logs, browser history and any error tracker.
+> Proving the Secret was injected does not require disclosing it; the length is
+> enough, and `14 chars` doubles as confirmation that no trailing newline crept in
+> (Task 4). Non-sensitive ConfigMap values are shown in full because they are not
+> secrets.
 
 `envFrom` is convenient but imports *everything* and gives no control over names;
 `secretKeyRef` is explicit and lets you rename a key. The usual convention is
@@ -361,6 +372,7 @@ $ curl -H 'Host: yatri.local' http://127.0.0.1:18080/api/
 Yatri Backend API
 ENVIRONMENT: production
 POSTGRES_USER: yatri_admin                           <-- backend
+POSTGRES_PASSWORD: <set, 14 chars>                   <-- masked, not echoed
 ```
 
 **The rewrite proven, not just configured.** The backend echoes the path it

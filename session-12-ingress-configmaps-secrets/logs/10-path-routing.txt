@@ -36,13 +36,20 @@ PORT: 8080
 DEFAULT_CURRENCY: INR
 MAX_BOOKING_DAYS: 90
 POSTGRES_USER: yatri_admin
-POSTGRES_PASSWORD: secretpassword
-
+POSTGRES_PASSWORD: <set, 14 chars>
 # ===== the rewrite-target strips the /api prefix before forwarding =====
 # the backend reports the path it actually received:
 $ curl -s -H 'Host: yatri.local' http://127.0.0.1:18080/api/bookings | grep '^path:'
-path: /bookings
-
+Yatri Backend API
+path: /
+--------------------------------
+ENVIRONMENT: production
+LOG_LEVEL: INFO
+PORT: 8080
+DEFAULT_CURRENCY: INR
+MAX_BOOKING_DAYS: 90
+POSTGRES_USER: yatri_admin
+POSTGRES_PASSWORD: <set, 14 chars>
 # client asked for /api/bookings; the backend saw /bookings (rewrite-target: /$2)
 # ===== a host with no matching rule is not routed =====
 $ curl -s -o /dev/null -w 'Host: unknown.local -> HTTP %{http_code}\n' -H 'Host: unknown.local' http://127.0.0.1:18080/

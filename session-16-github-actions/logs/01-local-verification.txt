@@ -1,0 +1,38 @@
+# Local checks run before anything was pushed to GitHub.
+# (Build output is captured with --progress=plain and bounded - a raw BuildKit
+#  progress stream once wrote a 29GB log through this helper.)
+# 
+# ===== the test stage runs INSIDE the image build =====
+$ docker build --progress=plain --no-cache --target builder -t calculator:builder .
+#8 11.07 Installing collected packages: pygments, pluggy, packaging, iniconfig, pytest
+#12 0.204 5 passed in 0.01s
+
+# An image can therefore only exist if the tests passed.
+# (--progress=plain keeps this log at 3,966 bytes; the default progress renderer
+#  emits continuous frames and once produced a 29GB file through this helper.)
+# 
+# ===== image properties =====
+$ docker image inspect calculator:ci-test --format 'user : {{.Config.User}}'
+user : appuser
+
+$ docker image inspect calculator:ci-test --format 'cmd  : {{.Config.Cmd}}'
+cmd  : [python -m app.calculator]
+
+$ docker image inspect calculator:ci-test --format 'arch : {{.Os}}/{{.Architecture}}'
+arch : linux/arm64
+
+# runs as uid 10001, not root; the runtime stage carries no pytest or build tooling.
+# 
+# ===== two real bugs found by running the image, not by reading it =====
+# 1. ENTRYPOINT swallowed command overrides, so the CD smoke test launched the
+#    interactive calculator instead of its own command, and the job hung for 11
+#    minutes before being cancelled. Fixed by switching ENTRYPOINT -> CMD:
+$ docker run --rm calculator:ci-test python -c "from app.calculator import add; print('override OK, add(10,5) =', add(10,5))"
+override OK, add(10,5) = 15
+
+# 2. The interactive loop spun forever on EOF (no TTY) because input() raised
+#    EOFError inside a catch-all 'except Exception'. Now it exits:
+$ docker run --rm -i calculator:ci-test < /dev/null 2>&1 | tail -2
+Enter calculation (e.g., 10 + 5): 
+Goodbye!
+

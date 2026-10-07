@@ -51,6 +51,9 @@ YATRI_FRONTEND_SERVICE_SERVICE_PORT=80
 # (KUBERNETES_* and YATRI_* entries are service-discovery vars the kubelet adds.)
 # 
 # and the application itself reads them at request time:
+# NOTE: the backend reports the SECRET by presence, never by value - echoing a
+# credential in an HTTP response would leak it through the ingress, proxy logs
+# and browser history. The ConfigMap values are not sensitive and are shown.
 $ kubectl exec curl-client -- curl -s http://yatri-backend-service:8080/
 Yatri Backend API
 path: /
@@ -61,5 +64,5 @@ PORT: 8080
 DEFAULT_CURRENCY: INR
 MAX_BOOKING_DAYS: 90
 POSTGRES_USER: yatri_admin
-POSTGRES_PASSWORD: secretpassword
+POSTGRES_PASSWORD: <set, 14 chars>
 
