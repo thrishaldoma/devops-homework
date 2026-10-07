@@ -1,0 +1,200 @@
+# Full Terraform workflow against LocalStack (an AWS API emulator in Docker).
+# Every command below really executed; only the cloud behind the API is simulated.
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session18-terraform-iac/terraform-s3-demo version
+Terraform v1.16.4
+on darwin_arm64
+
+Your version of Terraform is out of date! The latest version
+is 1.16.5. You can update by downloading from https://developer.hashicorp.com/terraform/install
+
+# 
+# ===== 1. terraform init - download the provider, set up the backend =====
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session18-terraform-iac/terraform-s3-demo init -no-color 2>&1 | tail -12
+so that Terraform can guarantee to make the same selections by default when
+you run "terraform init" in the future.
+
+Terraform has been successfully initialized!
+
+You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+
+# 
+# ===== 2. terraform fmt - canonical formatting =====
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session18-terraform-iac/terraform-s3-demo fmt -check -diff -no-color 2>&1 | tail -5; echo "exit: $?"
+exit: 0
+
+# 
+# ===== 3. terraform validate - syntax and type checking =====
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session18-terraform-iac/terraform-s3-demo validate -no-color
+Success! The configuration is valid.
+
+
+# 
+# ===== 4. terraform plan - what WOULD change, before anything does =====
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session18-terraform-iac/terraform-s3-demo plan -no-color 2>&1 | tail -22
+      + bucket = (known after apply)
+      + id     = (known after apply)
+      + region = "ap-south-1"
+
+      + versioning_configuration {
+          + mfa_delete = (known after apply)
+          + status     = "Enabled"
+        }
+    }
+
+Plan: 4 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  + bucket_arn        = (known after apply)
+  + bucket_name       = "yatri-session18-demo"
+  + bucket_region     = "ap-south-1"
+  + versioning_status = "Enabled"
+
+─────────────────────────────────────────────────────────────────────────────
+
+Note: You didn't use the -out option to save this plan, so Terraform can't
+guarantee to take exactly these actions if you run "terraform apply" now.
+
+# 
+# ===== 5. terraform apply - create the resources for real =====
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session18-terraform-iac/terraform-s3-demo apply -auto-approve -no-color 2>&1 | tail -14
+aws_s3_bucket_versioning.demo: Creating...
+aws_s3_bucket_server_side_encryption_configuration.demo: Creating...
+aws_s3_bucket_public_access_block.demo: Creation complete after 0s [id=yatri-session18-demo]
+aws_s3_bucket_server_side_encryption_configuration.demo: Creation complete after 0s [id=yatri-session18-demo]
+aws_s3_bucket_versioning.demo: Creation complete after 1s [id=yatri-session18-demo]
+
+Apply complete! Resources: 4 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+bucket_arn = "arn:aws:s3:::yatri-session18-demo"
+bucket_name = "yatri-session18-demo"
+bucket_region = "ap-south-1"
+versioning_status = "Enabled"
+
+# 
+# ===== independent proof the bucket really exists (S3 API, not Terraform) =====
+
+$ curl -s -o /dev/null -w 'HEAD bucket -> HTTP %{http_code}\n' http://localhost:4566/yatri-session18-demo
+HEAD bucket -> HTTP 200
+
+$ curl -s 'http://localhost:4566/yatri-session18-demo?versioning' | head -3
+<?xml version='1.0' encoding='utf-8'?>
+<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Status>Enabled</Status></VersioningConfiguration>
+
+# 
+# ===== 6. terraform show - the state as Terraform sees it =====
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session18-terraform-iac/terraform-s3-demo show -no-color 2>&1 | head -18
+# aws_s3_bucket.demo:
+resource "aws_s3_bucket" "demo" {
+    acceleration_status         = null
+    arn                         = "arn:aws:s3:::yatri-session18-demo"
+    bucket                      = "yatri-session18-demo"
+    bucket_domain_name          = "yatri-session18-demo.s3.amazonaws.com"
+    bucket_namespace            = "global"
+    bucket_prefix               = null
+    bucket_region               = "ap-south-1"
+    bucket_regional_domain_name = "yatri-session18-demo.s3.ap-south-1.amazonaws.com"
+    force_destroy               = true
+    hosted_zone_id              = "Z11RGJOFQNVJUP"
+    id                          = "yatri-session18-demo"
+    object_lock_enabled         = false
+    policy                      = null
+    region                      = "ap-south-1"
+    request_payer               = "BucketOwner"
+    tags                        = {}
+
+# 
+# ===== 7. terraform output - machine-readable, for pipelines =====
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session18-terraform-iac/terraform-s3-demo output -no-color
+bucket_arn = "arn:aws:s3:::yatri-session18-demo"
+bucket_name = "yatri-session18-demo"
+bucket_region = "ap-south-1"
+versioning_status = "Enabled"
+
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session18-terraform-iac/terraform-s3-demo output -json 2>/dev/null | python3 -m json.tool | head -12
+{
+    "bucket_arn": {
+        "sensitive": false,
+        "type": "string",
+        "value": "arn:aws:s3:::yatri-session18-demo"
+    },
+    "bucket_name": {
+        "sensitive": false,
+        "type": "string",
+        "value": "yatri-session18-demo"
+    },
+    "bucket_region": {
+
+# 
+# ===== state: the mapping between config and real infrastructure =====
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session18-terraform-iac/terraform-s3-demo state list
+aws_s3_bucket.demo
+aws_s3_bucket_public_access_block.demo
+aws_s3_bucket_server_side_encryption_configuration.demo
+aws_s3_bucket_versioning.demo
+
+# The state file records resource IDs. Deleting it would orphan the real
+# resources: Terraform would try to CREATE them again and fail. This is why
+# production state lives in a remote backend (S3 + DynamoDB lock), never on a
+# laptop and never in Git.
+# 
+# ===== idempotency: a second plan finds nothing to do =====
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session18-terraform-iac/terraform-s3-demo plan -no-color 2>&1 | grep -E 'No changes|Plan:'
+No changes. Your infrastructure matches the configuration.
+
+# That is the declarative property: the config describes a DESIRED state, so
+# re-running apply is a no-op instead of creating a second bucket.
+# 
+# ===== drift detection: change reality behind Terraform's back =====
+# delete the bucket directly through the S3 API, bypassing Terraform:
+$ curl -s -X DELETE -o /dev/null -w 'DELETE bucket -> HTTP %{http_code}\n' http://localhost:4566/yatri-session18-demo
+DELETE bucket -> HTTP 204
+
+$ curl -s -o /dev/null -w 'bucket now        -> HTTP %{http_code} (404 = gone)\n' http://localhost:4566/yatri-session18-demo
+bucket now        -> HTTP 404 (404 = gone)
+
+# Terraform's state still believes it exists. Ask it to re-plan:
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session18-terraform-iac/terraform-s3-demo plan -no-color 2>&1 | grep -E 'has been deleted|will be created|Plan:' | head -5
+  # aws_s3_bucket.demo has been deleted
+  # aws_s3_bucket.demo will be created
+  # aws_s3_bucket_public_access_block.demo will be created
+  # aws_s3_bucket_server_side_encryption_configuration.demo will be created
+  # aws_s3_bucket_versioning.demo will be created
+
+# It refreshed state, saw the resource was gone, and planned to recreate it.
+# That refresh step is why you never click in the console on a Terraform-managed
+# resource: Terraform will quietly put it back on the next apply.
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session18-terraform-iac/terraform-s3-demo apply -auto-approve -no-color 2>&1 | tail -3
+bucket_name = "yatri-session18-demo"
+bucket_region = "ap-south-1"
+versioning_status = "Enabled"
+
+$ curl -s -o /dev/null -w 'bucket restored   -> HTTP %{http_code}\n' http://localhost:4566/yatri-session18-demo
+bucket restored   -> HTTP 200
+
+# 
+# NOTE on an earlier observation: the FIRST apply left tags empty on LocalStack
+# (terraform show reported tags = {}), so the next plan wanted to correct them.
+# That is a LocalStack fidelity gap, not Terraform drift - worth knowing when
+# using an emulator to learn, because it looks exactly like real drift.
+# 
+# ===== 8. terraform destroy =====
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session18-terraform-iac/terraform-s3-demo destroy -auto-approve -no-color 2>&1 | tail -4
+aws_s3_bucket.demo: Destroying... [id=yatri-session18-demo]
+aws_s3_bucket.demo: Destruction complete after 0s
+
+Destroy complete! Resources: 4 destroyed.
+
+$ curl -s -o /dev/null -w 'bucket after destroy -> HTTP %{http_code} (404 = gone)\n' http://localhost:4566/yatri-session18-demo
+bucket after destroy -> HTTP 404 (404 = gone)
+
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session18-terraform-iac/terraform-s3-demo state list 2>&1 | wc -l | xargs echo 'resources left in state:'
+resources left in state: 0
+
