@@ -41,6 +41,7 @@ neither systemd nor those utilities. The image definition is in
 | 18 | Terraform & IaC | [`session18-terraform-iac/`](./session18-terraform-iac) | S3 project on LocalStack · drift detection · IAM/EC2/S3/VPC/DynamoDB+RDS write-ups |
 | 19 | Cloud & Terraform in Action | [`session19-cloud-terraform/`](./session19-cloud-terraform) | 21-resource VPC/subnets/SG/EC2/S3 stack · dependencies · verified via AWS CLI |
 | 20 | Monitoring, Observability & GitOps | [`session20-monitoring-observability-gitops/`](./session20-monitoring-observability-gitops) | Prometheus · Grafana · firing alerts · three pillars · Argo CD self-heal |
+| 21 | Final Capstone (TaskBoard) | [`session21-python/`](./session21-python) | reference project run end to end · Compose stack · CRUD · pytest · Trivy · Helm/Terraform/CI review |
 
 ## Sessions 09–20 — Kubernetes, CI/CD, IaC and GitOps
 
@@ -143,6 +144,15 @@ enabled: `ingress`, `metallb`, `metrics-server`.
 > `ARGOCD_REPO_SERVER_ALLOW_OUT_OF_BOUNDS_SYMLINKS=true` set (see Session 20).
 
 A LocalStack container (Sessions 18–19) is also still running on `:4566`.
+
+The **Session 21 Compose stack is also still up** (frontend, backend and
+Postgres), holding host ports `3080`, `8000` and `5432`:
+
+```bash
+# tear down the Session 21 stack
+cd session21-python && docker compose down -v
+docker rmi session21-python-backend:latest session21-python-frontend:latest
+```
 
 ```bash
 # tear down just the Session 20 workloads, leaving the cluster
