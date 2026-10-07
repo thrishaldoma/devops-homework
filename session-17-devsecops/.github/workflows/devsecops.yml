@@ -17,10 +17,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Least privilege: read-only by default. Each job widens only what it needs, so
+# the scanning jobs never hold a token that can write to the registry.
 permissions:
   contents: read
-  security-events: write      # upload SARIF to the Security tab
-  packages: write             # push to ghcr.io using GITHUB_TOKEN
 
 env:
   APP_DIR: session-17-devsecops/app-src
@@ -51,6 +51,9 @@ jobs:
   sast-bandit:
     name: "SAST: bandit"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write      # upload SARIF only
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -73,6 +76,9 @@ jobs:
   sast-codeql:
     name: "SAST: CodeQL"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write      # upload SARIF only
     steps:
       - uses: actions/checkout@v5
       - uses: github/codeql-action/init@v3
@@ -115,8 +121,13 @@ jobs:
         with: { fetch-depth: 0 }     # gitleaks needs full history
       - name: Run gitleaks
         run: |
-          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz \
+          # Pinned to the version the config was authored against. 8.21.2 does
+          # not understand the [[allowlists]] array syntax and silently ignored
+          # the allowlist, so the job failed on the 4 accepted findings.
+          GITLEAKS_VERSION=8.30.1
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
             | tar -xz -C /tmp gitleaks
+          /tmp/gitleaks version
           /tmp/gitleaks dir . \
             --config session-17-devsecops/security/.gitleaks.toml \
             --redact --no-banner --exit-code 1
@@ -133,14 +144,14 @@ jobs:
       - name: Build image
         run: docker build -t devsecops-demo:${{ github.sha }} ${{ env.APP_DIR }}
       - name: Trivy scan (table, for humans)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           image-ref: devsecops-demo:${{ github.sha }}
           format: table
           severity: CRITICAL,HIGH
           scanners: vuln
       - name: Trivy scan (JSON, for the gate)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           image-ref: devsecops-demo:${{ github.sha }}
           format: json
@@ -186,14 +197,17 @@ jobs:
     needs: security-gate
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write             # the ONLY job that can write to the registry
     steps:
       - uses: actions/checkout@v5
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}   # no user-managed secret needed
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ${{ env.APP_DIR }}
           push: true
@@ -210,7 +224,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Create a kind cluster
-        uses: helm/kind-action@v1.10.0
+        uses: helm/kind-action@0025e74a8c7512023d06dc019c617aa3cf561fde # v1.10.0
       - name: Build and load the image into kind
         # Loading directly avoids needing an imagePullSecret inside the cluster;
         # push-image has already proved the registry publish works.
