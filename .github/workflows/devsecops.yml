@@ -24,7 +24,10 @@ permissions:
 
 env:
   APP_DIR: session-17-devsecops/app-src
-  IMAGE: ghcr.io/${{ github.repository_owner }}/devsecops-demo
+  # IMAGE is computed in the push-image job rather than here. ghcr.io requires
+  # an all-lowercase path, but github.repository_owner preserves the account's
+  # own capitalisation, so interpolating it directly only works for owners whose
+  # login happens to be lowercase already.
 
 jobs:
   # ---------------------------------------------------------------- 1. tests
@@ -202,6 +205,14 @@ jobs:
       packages: write             # the ONLY job that can write to the registry
     steps:
       - uses: actions/checkout@v5
+      - name: Compute image name
+        # The owner is passed in as an env var instead of being interpolated into
+        # the script body: ${{ }} substitution happens before the shell runs, so
+        # untrusted context values belong in env, never inline. ${OWNER,,} is bash
+        # lowercase expansion, which makes this workflow portable to any owner.
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "IMAGE=ghcr.io/${OWNER,,}/devsecops-demo" >> "$GITHUB_ENV"
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
