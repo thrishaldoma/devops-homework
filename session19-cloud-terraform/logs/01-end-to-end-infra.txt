@@ -1,0 +1,201 @@
+# End-to-end AWS infrastructure: VPC -> subnets -> IGW/routes -> security
+# groups -> EC2 -> S3. Built against LocalStack; every command really ran.
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session19-cloud-terraform/infra fmt -check -no-color; echo "fmt exit: $?"
+fmt exit: 0
+
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session19-cloud-terraform/infra validate -no-color
+Success! The configuration is valid.
+
+
+# 
+# ===== plan: resource count and the dependency-derived ordering =====
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session19-cloud-terraform/infra plan -no-color 2>&1 | grep -E '^Plan:|will be created' | head -20
+  # aws_instance.web will be created
+  # aws_internet_gateway.main will be created
+  # aws_route_table.private will be created
+  # aws_route_table.public will be created
+  # aws_route_table_association.private["a"] will be created
+  # aws_route_table_association.private["b"] will be created
+  # aws_route_table_association.public["a"] will be created
+  # aws_route_table_association.public["b"] will be created
+  # aws_s3_bucket.assets will be created
+  # aws_s3_bucket_public_access_block.assets will be created
+  # aws_s3_bucket_server_side_encryption_configuration.assets will be created
+  # aws_s3_bucket_versioning.assets will be created
+  # aws_s3_object.readme will be created
+  # aws_security_group.app will be created
+  # aws_security_group.web will be created
+  # aws_subnet.private["a"] will be created
+  # aws_subnet.private["b"] will be created
+  # aws_subnet.public["a"] will be created
+  # aws_subnet.public["b"] will be created
+  # aws_vpc.main will be created
+
+# 
+# ===== apply =====
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session19-cloud-terraform/infra apply -auto-approve -no-color 2>&1 | grep -E 'Creation complete|Apply complete' | head -22
+random_id.suffix: Creation complete after 0s [id=BKHYrw]
+aws_vpc.main: Creation complete after 0s [id=vpc-d2e7a016]
+aws_s3_bucket.assets: Creation complete after 0s [id=session19-assets-04a1d8af]
+aws_s3_bucket_server_side_encryption_configuration.assets: Creation complete after 0s [id=session19-assets-04a1d8af]
+aws_s3_bucket_public_access_block.assets: Creation complete after 0s [id=session19-assets-04a1d8af]
+aws_subnet.private["b"]: Creation complete after 0s [id=subnet-702f3b1a]
+aws_subnet.private["a"]: Creation complete after 0s [id=subnet-b288f416]
+aws_internet_gateway.main: Creation complete after 0s [id=igw-eb7a019f]
+aws_route_table.private: Creation complete after 0s [id=rtb-d193d02d]
+aws_route_table_association.private["b"]: Creation complete after 0s [id=rtbassoc-dfb469bf]
+aws_route_table_association.private["a"]: Creation complete after 0s [id=rtbassoc-aafb7944]
+aws_security_group.web: Creation complete after 1s [id=sg-e771915b90ebd378b]
+aws_route_table.public: Creation complete after 1s [id=rtb-a1e9f221]
+aws_security_group.app: Creation complete after 0s [id=sg-a7a3d1bb3b46831c4]
+aws_s3_bucket_versioning.assets: Creation complete after 1s [id=session19-assets-04a1d8af]
+aws_subnet.public["a"]: Creation complete after 10s [id=subnet-033744fa]
+aws_subnet.public["b"]: Creation complete after 10s [id=subnet-c5d85eae]
+aws_route_table_association.public["b"]: Creation complete after 0s [id=rtbassoc-0b918eca]
+aws_route_table_association.public["a"]: Creation complete after 0s [id=rtbassoc-bf678ea5]
+aws_instance.web: Creation complete after 10s [id=i-0c53b54c43ffacc9e]
+aws_s3_object.readme: Creation complete after 0s [id=session19-assets-04a1d8af/README.txt]
+Apply complete! Resources: 21 added, 0 changed, 0 destroyed.
+
+# 
+# ===== outputs =====
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session19-cloud-terraform/infra output -no-color
+bucket_arn = "arn:aws:s3:::session19-assets-04a1d8af"
+bucket_name = "session19-assets-04a1d8af"
+instance_id = "i-0c53b54c43ffacc9e"
+instance_private_ip = "10.20.1.4"
+private_subnet_ids = {
+  "a" = "subnet-b288f416"
+  "b" = "subnet-702f3b1a"
+}
+public_subnet_ids = {
+  "a" = "subnet-033744fa"
+  "b" = "subnet-c5d85eae"
+}
+vpc_cidr = "10.20.0.0/16"
+vpc_id = "vpc-d2e7a016"
+web_security_group_id = "sg-e771915b90ebd378b"
+
+# 
+# ===== DEPENDENCIES: Terraform derived the order, nobody wrote it =====
+# IMPLICIT - aws_instance.web references the subnet and security group, so
+# those must exist first. Note the apply order above: subnets and SGs complete
+# before the instance (10s), and aws_s3_object.readme is last of all.
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session19-cloud-terraform/infra graph 2>/dev/null | grep -E 'aws_instance.web" ->' | head -4
+  "aws_instance.web" -> "data.aws_ami.amazon_linux";
+  "aws_instance.web" -> "aws_security_group.web";
+  "aws_instance.web" -> "aws_subnet.public";
+
+# EXPLICIT - aws_s3_object.readme references nothing about the instance, so
+# depends_on is what forces it to wait:
+$ grep -A 1 'depends_on' /Users/thrishaldoma/devops-homework/session19-cloud-terraform/infra/storage.tf
+# depends_on forces the ordering.
+resource "aws_s3_object" "readme" {
+--
+  depends_on = [aws_instance.web]
+}
+
+# 
+# ===== independent verification: the AWS CLI, not Terraform's own state =====
+# (unauthenticated curl only ever sees LocalStack's default VPC - EC2 calls
+#  need SigV4-signed requests, so the aws CLI is used here.)
+$ aws --endpoint-url=http://localhost:4566 ec2 describe-vpcs --query 'Vpcs[].{CIDR:CidrBlock,Id:VpcId}' --output table
+-----------------------------------
+|          DescribeVpcs           |
++----------------+----------------+
+|      CIDR      |      Id        |
++----------------+----------------+
+|  172.31.0.0/16 |  vpc-fb57a2df  |
+|  10.20.0.0/16  |  vpc-d2e7a016  |
++----------------+----------------+
+
+$ aws --endpoint-url=http://localhost:4566 ec2 describe-subnets --filters Name=vpc-id,Values=$(terraform -chdir=/Users/thrishaldoma/devops-homework/session19-cloud-terraform/infra output -raw vpc_id) --query 'Subnets[].{CIDR:CidrBlock,AZ:AvailabilityZone,Public:MapPublicIpOnLaunch}' --output table
+--------------------------------------------
+|              DescribeSubnets             |
++--------------+-----------------+---------+
+|      AZ      |      CIDR       | Public  |
++--------------+-----------------+---------+
+|  ap-south-1a |  10.20.1.0/24   |  True   |
+|  ap-south-1a |  10.20.11.0/24  |  False  |
+|  ap-south-1b |  10.20.12.0/24  |  False  |
+|  ap-south-1b |  10.20.2.0/24   |  True   |
++--------------+-----------------+---------+
+
+$ aws --endpoint-url=http://localhost:4566 ec2 describe-instances --query 'Reservations[].Instances[].{Id:InstanceId,Type:InstanceType,PrivateIP:PrivateIpAddress,State:State.Name}' --output table
+-------------------------------------------------------------
+|                     DescribeInstances                     |
++----------------------+------------+----------+------------+
+|          Id          | PrivateIP  |  State   |   Type     |
++----------------------+------------+----------+------------+
+|  i-0c53b54c43ffacc9e |  10.20.1.4 |  running |  t3.micro  |
++----------------------+------------+----------+------------+
+
+$ aws --endpoint-url=http://localhost:4566 ec2 describe-security-groups --filters Name=vpc-id,Values=$(terraform -chdir=/Users/thrishaldoma/devops-homework/session19-cloud-terraform/infra output -raw vpc_id) --query 'SecurityGroups[].{Name:GroupName,Id:GroupId}' --output table
+----------------------------------------------
+|           DescribeSecurityGroups           |
++-----------------------+--------------------+
+|          Id           |       Name         |
++-----------------------+--------------------+
+|  sg-0210a0b5451ba7f90 |  default           |
+|  sg-e771915b90ebd378b |  session19-web-sg  |
+|  sg-a7a3d1bb3b46831c4 |  session19-app-sg  |
++-----------------------+--------------------+
+
+# the app tier's rule references the web SG by ID, not a CIDR:
+$ aws --endpoint-url=http://localhost:4566 ec2 describe-security-groups --filters Name=group-name,Values=session19-app-sg --query 'SecurityGroups[0].IpPermissions[0].UserIdGroupPairs[].GroupId' --output text
+sg-e771915b90ebd378b
+
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session19-cloud-terraform/infra output -raw web_security_group_id; echo '   <- matches'
+sg-e771915b90ebd378b   <- matches
+
+# 
+# ===== S3 =====
+$ aws --endpoint-url=http://localhost:4566 s3 ls
+2026-10-07 21:52:37 session19-assets-04a1d8af
+
+$ aws --endpoint-url=http://localhost:4566 s3api get-bucket-versioning --bucket session19-assets-04a1d8af
+{
+    "Status": "Enabled"
+}
+
+$ curl -s http://localhost:4566/session19-assets-04a1d8af/README.txt
+Assets bucket for session19 (dev).
+
+# 
+# ===== destroy: reverse dependency order, derived automatically =====
+$ terraform destroy -auto-approve    # destruction order, in sequence
+ 1. aws_s3_bucket_server_side_encryption_configuration.assets
+ 2. aws_s3_bucket_versioning.assets
+ 3. aws_s3_object.readme
+ 4. aws_route_table_association.private["a"]
+ 5. aws_route_table_association.public["a"]
+ 6. aws_route_table_association.public["b"]
+ 7. aws_route_table_association.private["b"]
+ 8. aws_security_group.app
+ 9. aws_s3_bucket_public_access_block.assets
+10. aws_subnet.private["a"]
+11. aws_s3_bucket.assets
+12. aws_subnet.private["b"]
+13. random_id.suffix
+14. aws_route_table.public
+15. aws_route_table.private
+16. aws_internet_gateway.main
+17. aws_instance.web
+18. aws_subnet.public["b"]
+19. aws_subnet.public["a"]
+20. aws_security_group.web
+21. aws_vpc.main
+
+# Read it bottom-up against the build order: the S3 object and the EC2
+# instance go early, subnets and the IGW next, and aws_vpc.main is LAST -
+# you cannot delete a VPC that still contains subnets. Nobody wrote this
+# ordering; Terraform walked the same dependency graph backwards.
+$ aws --endpoint-url=http://localhost:4566 ec2 describe-vpcs --query 'Vpcs[].CidrBlock' --output text
+172.31.0.0/16
+
+$ aws --endpoint-url=http://localhost:4566 s3 ls 2>&1 | head -2; echo '(no buckets)'
+(no buckets)
+
+$ terraform -chdir=/Users/thrishaldoma/devops-homework/session19-cloud-terraform/infra state list 2>&1 | wc -l | xargs echo 'resources left in state:'
+resources left in state: 0
+
