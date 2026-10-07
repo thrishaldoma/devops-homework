@@ -1,0 +1,68 @@
+# The hardened Deployment, verified on the local 2-node cluster before CI ran it.
+$ kubectl get pods -l app=session17-python -o wide
+NAME                               READY   STATUS    RESTARTS   AGE   IP            NODE           NOMINATED NODE   READINESS GATES
+session17-python-ff6bcb4fd-kp89q   1/1     Running   0          22s   10.244.0.24   minikube       <none>           <none>
+session17-python-ff6bcb4fd-mdhfr   1/1     Running   0          22s   10.244.1.65   minikube-m02   <none>           <none>
+
+# 
+# ===== the security context is actually ENFORCED, not just declared =====
+$ kubectl exec deploy/session17-python -- id
+uid=10001(appuser) gid=10001(appuser) groups=10001(appuser)
+
+$ kubectl exec deploy/session17-python -- sh -c 'touch /app/evil 2>&1 || echo "BLOCKED: root filesystem is read-only"'
+touch: cannot touch '/app/evil': Read-only file system
+BLOCKED: root filesystem is read-only
+
+$ kubectl exec deploy/session17-python -- sh -c 'touch /tmp/ok && echo "/tmp is writable (emptyDir), as gunicorn needs"'
+/tmp is writable (emptyDir), as gunicorn needs
+
+$ kubectl get pod -l app=session17-python -o jsonpath='runAsNonRoot : {.items[0].spec.securityContext.runAsNonRoot}{"\n"}runAsUser    : {.items[0].spec.securityContext.runAsUser}{"\n"}readOnlyRootFs: {.items[0].spec.containers[0].securityContext.readOnlyRootFilesystem}{"\n"}capabilities : {.items[0].spec.containers[0].securityContext.capabilities}{"\n"}'
+runAsNonRoot : true
+runAsUser    : 10001
+readOnlyRootFs: true
+capabilities : {"drop":["ALL"]}
+
+# 
+# ===== and the application actually works =====
+$ kubectl exec hc17 -- curl -sS --max-time 5 http://session17-python/health
+{"status":"healthy","timestamp":"2026-10-07T15:28:37.507604Z","uptime_seconds":22.07}
+
+$ kubectl exec hc17 -- curl -sS --max-time 5 http://session17-python/api/status
+{"app":"DevSecOps Dashboard","platform":"Linux","python_version":"3.12.14","status":"running","timestamp":"2026-10-07T15:28:37.569148Z","total_requests":3,"uptime":"00h 00m 22s","version":"2.0.0"}
+
+# 
+# ===== contrast with the course's reference manifest =====
+$ diff /Users/thrishaldoma/devops-homework/session-17-devsecops/reference/deployment-course-reference.yaml /Users/thrishaldoma/devops-homework/session-17-devsecops/app-src/k8s/deployment.yaml | head -32
+0a1,5
+> # Security-hardened Deployment for the DevSecOps demo.
+> #
+> # The course reference (../../reference/deployment-course-reference.yaml) has no
+> # securityContext, no probes and no resource limits. Each addition below closes a
+> # specific gap that a cluster policy scanner (or a real incident) would find.
+4a10,11
+>   labels:
+>     app: session17-python
+14a22,26
+>       securityContext:
+>         runAsNonRoot: true          # refuse to start if the image would run as root
+>         runAsUser: 10001
+>         seccompProfile:
+>           type: RuntimeDefault      # restrict the syscall surface
+17,18c29,30
+<           image: nensiravaliya28/hey-cicd:__IMAGE_TAG__
+<           imagePullPolicy: Always           # pull from Docker Hub
+---
+>           image: devsecops-demo:__IMAGE_TAG__
+>           imagePullPolicy: IfNotPresent
+20a33,54
+>           securityContext:
+>             allowPrivilegeEscalation: false
+>             readOnlyRootFilesystem: true     # nothing writes to the image layer
+>             capabilities:
+>               drop: ["ALL"]                  # no Linux capabilities at all
+>           resources:
+>             requests: { cpu: 50m,  memory: 64Mi }
+>             limits:   { cpu: 500m, memory: 256Mi }
+>           readinessProbe:
+>             httpGet: { path: /health, port: 5001 }
+

@@ -1,0 +1,27 @@
+# gitleaks configuration for this repository.
+#
+# TRIAGE, NOT SUPPRESSION. gitleaks correctly flags four findings: the two
+# Session 12 Kubernetes Secret manifests, each matching both the
+# `kubernetes-secret-yaml` and `generic-api-key` rules.
+#
+# They are accepted because:
+#   * the credentials are throwaway teaching values (`yatri_admin` /
+#     `secretpassword`) that exist only inside an ephemeral minikube cluster;
+#   * the files exist specifically to TEACH that committing base64 Secrets is an
+#     anti-pattern - Session 12's Task 5 writes it up at length;
+#   * no real system accepts these credentials.
+#
+# This is the correct way to handle an accepted finding: scope the exception to
+# named paths with a written reason, so the scanner still fails on anything new.
+# Deleting the rule, or passing --no-fail, would hide the next real leak.
+title = "devops-homework gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Session 12 teaching manifests - intentional demo credentials, documented in session-12/README.md Task 5"
+paths = [
+  '''session-12-ingress-configmaps-secrets/02-secret/db-secret\.yaml''',
+  '''session-12-ingress-configmaps-secrets/04-full-demo/secret\.yaml''',
+]

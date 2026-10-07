@@ -1,0 +1,118 @@
+# Every scanner below was run locally against this repository and image.
+# 
+# ===== SECRET SCANNING - gitleaks =====
+$ gitleaks version
+8.30.1
+
+$ (cd /Users/thrishaldoma/devops-homework && gitleaks dir . --no-banner --redact 2>&1 | tail -12)
+[90m8:53PM[0m [32mINF[0m [1mscanned ~1176303 bytes (1.18 MB) in 104ms[0m
+[90m8:53PM[0m [33mWRN[0m [1mleaks found: 4[0m
+
+# 
+# ===== SCA - pip-audit against the app's dependencies =====
+$ python3 -m pip install --quiet --user pip-audit 2>&1 | tail -2; echo installed
+WARNING: You are using pip version 21.2.4; however, version 26.0.1 is available.
+You should consider upgrading via the '/Library/Developer/CommandLineTools/usr/bin/python3 -m pip install --upgrade pip' command.
+installed
+
+$ (cd /Users/thrishaldoma/devops-homework/session-17-devsecops/app-src && python3 -m pip_audit -r requirements.txt 2>&1 | tail -10)
+/Users/thrishaldoma/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+Found 1 known vulnerability in 1 package
+Name  Version ID              Fix Versions
+----- ------- --------------- ------------
+click 8.1.8   PYSEC-2026-2132 8.3.3
+
+# 4 leaks found. ALL FOUR are the Session 12 Kubernetes Secret manifests:
+$ python3 -c "
+import json;d=json.load(open('/tmp/gl.json'))
+for f in d: print('%-24s %s:%s' % (f['RuleID'], f['File'], f['StartLine']))"
+kubernetes-secret-yaml   session-12-ingress-configmaps-secrets/04-full-demo/secret.yaml:7
+generic-api-key          session-12-ingress-configmaps-secrets/04-full-demo/secret.yaml:15
+kubernetes-secret-yaml   session-12-ingress-configmaps-secrets/02-secret/db-secret.yaml:7
+generic-api-key          session-12-ingress-configmaps-secrets/02-secret/db-secret.yaml:15
+
+# This is the single best demonstration in the whole session: the scanner caught
+# precisely the anti-pattern that Session 12's own Task 5 writes about - a
+# base64 Secret committed to Git. The values are throwaway lab credentials, but
+# gitleaks is right to flag the PATTERN, which is what matters.
+# Correct triage is to accept them with a written justification, NOT to silence
+# the scanner - see security/.gitleaks.toml.
+# 
+# ===== SCA finding: a real CVE in a transitive dependency =====
+# click 8.1.8 is pulled in by Flask; PYSEC-2026-2132 is fixed in 8.3.3.
+# Nothing in requirements.txt mentions click - that is the point of SCA:
+# your dependency tree is bigger than your dependency list.
+$ (cd /Users/thrishaldoma/devops-homework/session-17-devsecops/app-src && python3 -m pip_audit -r requirements.txt 2>/dev/null | tail -5)
+Name  Version ID              Fix Versions
+----- ------- --------------- ------------
+click 8.1.8   PYSEC-2026-2132 8.3.3
+
+# 
+# ===== CONTAINER IMAGE SCANNING - trivy =====
+$ trivy --version 2>&1 | head -2
+Version: 0.75.0
+
+# counts by severity, hardened image vs the course's reference Dockerfile:
+$ trivy image --severity HIGH,CRITICAL --scanners vuln -f json devsecops-demo:local 2>/dev/null | python3 -c "
+import json,sys
+d=json.load(sys.stdin); n={}
+for r in d.get('Results') or []:
+    for v in r.get('Vulnerabilities') or []: n[v['Severity']]=n.get(v['Severity'],0)+1
+print('devsecops-demo:local'.ljust(36), 'CRITICAL=%d HIGH=%d' % (n.get('CRITICAL',0), n.get('HIGH',0)))"
+devsecops-demo:local                 CRITICAL=0 HIGH=51
+
+$ trivy image --severity HIGH,CRITICAL --scanners vuln -f json devsecops-demo:course-reference 2>/dev/null | python3 -c "
+import json,sys
+d=json.load(sys.stdin); n={}
+for r in d.get('Results') or []:
+    for v in r.get('Vulnerabilities') or []: n[v['Severity']]=n.get(v['Severity'],0)+1
+print('devsecops-demo:course-reference'.ljust(36), 'CRITICAL=%d HIGH=%d' % (n.get('CRITICAL',0), n.get('HIGH',0)))"
+devsecops-demo:course-reference      CRITICAL=0 HIGH=51
+
+# 
+# Both carry the same base-image CVEs - python:3.12-slim is the shared parent and
+# the findings are Debian packages (perl-base, util-linux, zlib) with no fix
+# released yet. Trivy reports them as fix_deferred / affected, i.e. nothing to
+# upgrade to. That is the realistic case: most image findings are inherited, and
+# the lever is choosing a smaller base, not patching your own code.
+# 
+# The REAL difference between the two images is not the CVE count:
+$ docker image inspect devsecops-demo:local --format 'hardened : user={{.Config.User}} cmd={{.Config.Cmd}}'
+hardened : user=appuser cmd=[gunicorn --bind 0.0.0.0:5001 --workers 2 app.app:app]
+
+$ docker image inspect devsecops-demo:course-reference --format 'reference: user={{.Config.User}} cmd={{.Config.Cmd}}'
+reference: user= cmd=[python app/app.py]
+
+# The reference image runs as ROOT and starts the Flask DEV server, which has
+# debug=True in app.py - that exposes the Werkzeug console, i.e. remote code
+# execution. No CVE scanner reports that; it is a configuration flaw, which is
+# exactly why SAST and review matter alongside dependency scanning.
+# 
+# ===== SECURITY GATE TRIAGE: allowlist the 4 known findings, keep the scanner live =====
+# security/.gitleaks.toml scopes an exception to two named paths with a written
+# reason. Suppressing the rule outright would hide the next real leak.
+$ gitleaks dir . --config /Users/thrishaldoma/devops-homework/session-17-devsecops/security/.gitleaks.toml --no-banner --redact 2>&1 | tail -2
+[90m8:56PM[0m [32mINF[0m [1mscanned ~1180408 bytes (1.18 MB) in 115ms[0m
+[90m8:56PM[0m [32mINF[0m [1mno leaks found[0m
+
+# 
+# PROVE the scanner is still live - plant a canary secret and rescan:
+$ gitleaks dir . --config /Users/thrishaldoma/devops-homework/session-17-devsecops/security/.gitleaks.toml --no-banner --redact 2>&1 | tail -2
+[90m8:56PM[0m [32mINF[0m [1mscanned ~1180807 bytes (1.18 MB) in 129ms[0m
+[90m8:56PM[0m [33mWRN[0m [1mleaks found: 1[0m
+
+# caught. The allowlist suppresses only the two named Session 12 files.
+$ gitleaks dir . --no-banner --redact 2>&1 | tail -2
+[90m8:56PM[0m [32mINF[0m [1mscanned ~1182142 bytes (1.18 MB) in 136ms[0m
+[90m8:56PM[0m [33mWRN[0m [1mleaks found: 5[0m
+
+# without the config: 5 (the 4 accepted + the canary), confirming the scope.
+# 
+# SIDE NOTE worth knowing: the first canary used AWS's documented example key
+# (wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY) and was NOT flagged - gitleaks
+# allowlists well-known documentation keys by default. Verifying a scanner with
+# a sample key from the docs will tell you it is broken when it is not:
+$ mkdir -p /tmp/glt && printf 'aws_secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"\n' > /tmp/glt/a.tf; gitleaks dir /tmp/glt --no-banner --redact 2>&1 | tail -1
+[90m8:56PM[0m [32mINF[0m [1mno leaks found[0m
+

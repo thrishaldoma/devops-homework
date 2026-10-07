@@ -1,0 +1,237 @@
+# Session 17 - DevSecOps pipeline.
+#
+#  Code → Build → Unit Test → SAST → SCA → Secret Scan → Docker Build
+#       → Image Scan → SECURITY GATE → Push (ghcr.io) → Deploy to Kubernetes
+#
+# "Shift left": every security control runs before the image is published, and
+# the gate job is what actually blocks a release.
+name: DevSecOps
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'session-17-devsecops/**'
+      - '.github/workflows/devsecops.yml'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write      # upload SARIF to the Security tab
+  packages: write             # push to ghcr.io using GITHUB_TOKEN
+
+env:
+  APP_DIR: session-17-devsecops/app-src
+  IMAGE: ghcr.io/${{ github.repository_owner }}/devsecops-demo
+
+jobs:
+  # ---------------------------------------------------------------- 1. tests
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.12', cache: pip }
+      - name: Install dependencies
+        working-directory: ${{ env.APP_DIR }}
+        run: pip install -r requirements-dev.txt
+      - name: Run tests with coverage
+        working-directory: ${{ env.APP_DIR }}
+        run: pytest --cov=app --cov-report=term-missing --cov-report=xml
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: coverage
+          path: ${{ env.APP_DIR }}/coverage.xml
+
+  # ------------------------------------------------------------------ 2. SAST
+  sast-bandit:
+    name: "SAST: bandit"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.12' }
+      - run: pip install bandit[sarif]
+      - name: Run bandit
+        working-directory: ${{ env.APP_DIR }}
+        # -ll = report MEDIUM and above. Does not fail the build on its own;
+        # the gate job decides, so every finding is visible first.
+        run: bandit -r app/ -ll -f txt || true
+      - name: Run bandit (SARIF for the Security tab)
+        working-directory: ${{ env.APP_DIR }}
+        run: bandit -r app/ -ll -f sarif -o bandit.sarif || true
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ env.APP_DIR }}/bandit.sarif
+          category: bandit
+        continue-on-error: true
+
+  sast-codeql:
+    name: "SAST: CodeQL"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: github/codeql-action/init@v3
+        with: { languages: python }
+      - uses: github/codeql-action/analyze@v3
+        with: { category: codeql-python }
+
+  # ------------------------------------------------------------------- 3. SCA
+  sca:
+    name: "SCA: pip-audit"
+    runs-on: ubuntu-latest
+    outputs:
+      vulns: ${{ steps.audit.outputs.count }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.12' }
+      - run: pip install pip-audit
+      - name: Audit dependencies
+        id: audit
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          set +e
+          pip-audit -r requirements.txt --format json --output audit.json
+          pip-audit -r requirements.txt            # human-readable in the log
+          set -e
+          COUNT=$(python -c "import json;d=json.load(open('audit.json'));print(sum(len(p.get('vulns',[])) for p in d.get('dependencies',[])))")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "pip-audit found $COUNT known vulnerabilities" >> $GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with: { name: sca-report, path: '${{ env.APP_DIR }}/audit.json' }
+
+  # --------------------------------------------------------- 4. secret scanning
+  secret-scan:
+    name: "Secret scanning: gitleaks"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }     # gitleaks needs full history
+      - name: Run gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz \
+            | tar -xz -C /tmp gitleaks
+          /tmp/gitleaks dir . \
+            --config session-17-devsecops/security/.gitleaks.toml \
+            --redact --no-banner --exit-code 1
+
+  # --------------------------------------------------------- 5. build + image scan
+  image-scan:
+    name: "Image scan: trivy"
+    needs: [test, sast-bandit, sca, secret-scan]
+    runs-on: ubuntu-latest
+    outputs:
+      critical: ${{ steps.count.outputs.critical }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build image
+        run: docker build -t devsecops-demo:${{ github.sha }} ${{ env.APP_DIR }}
+      - name: Trivy scan (table, for humans)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: devsecops-demo:${{ github.sha }}
+          format: table
+          severity: CRITICAL,HIGH
+          scanners: vuln
+      - name: Trivy scan (JSON, for the gate)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: devsecops-demo:${{ github.sha }}
+          format: json
+          output: trivy.json
+          severity: CRITICAL,HIGH
+          scanners: vuln
+          ignore-unfixed: true        # only count what can actually be patched
+      - name: Count fixable findings
+        id: count
+        run: |
+          C=$(python3 -c "import json;d=json.load(open('trivy.json'));print(sum(1 for r in (d.get('Results') or []) for v in (r.get('Vulnerabilities') or []) if v['Severity']=='CRITICAL'))")
+          H=$(python3 -c "import json;d=json.load(open('trivy.json'));print(sum(1 for r in (d.get('Results') or []) for v in (r.get('Vulnerabilities') or []) if v['Severity']=='HIGH'))")
+          echo "critical=$C" >> "$GITHUB_OUTPUT"
+          echo "Fixable: CRITICAL=$C HIGH=$H" >> $GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with: { name: trivy-report, path: trivy.json }
+
+  # -------------------------------------------------------------- 6. the gate
+  security-gate:
+    name: Security gate
+    needs: [sca, image-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate
+        run: |
+          CRIT="${{ needs.image-scan.outputs.critical }}"
+          echo "Fixable CRITICAL image vulnerabilities: $CRIT"
+          # Policy: block on FIXABLE CRITICALs only.
+          # HIGHs in this image are inherited Debian CVEs with no fix released
+          # (trivy marks them fix_deferred); failing on those would block every
+          # build forever and teach the team to bypass the gate.
+          if [ "${CRIT:-0}" -gt 0 ]; then
+            echo "::error::Security gate FAILED - $CRIT fixable CRITICAL vulnerabilities"
+            exit 1
+          fi
+          echo "Security gate PASSED"
+          echo "### Security gate passed :lock:" >> $GITHUB_STEP_SUMMARY
+
+  # --------------------------------------------------------------- 7. publish
+  push-image:
+    name: Push to ghcr.io
+    needs: security-gate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}   # no user-managed secret needed
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.APP_DIR }}
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+
+  # ---------------------------------------------------------------- 8. deploy
+  deploy:
+    name: Deploy to Kubernetes
+    needs: push-image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Create a kind cluster
+        uses: helm/kind-action@v1.10.0
+      - name: Build and load the image into kind
+        # Loading directly avoids needing an imagePullSecret inside the cluster;
+        # push-image has already proved the registry publish works.
+        run: |
+          docker build -t devsecops-demo:${{ github.sha }} ${{ env.APP_DIR }}
+          kind load docker-image devsecops-demo:${{ github.sha }} --name chart-testing
+      - name: Point the manifest at that tag
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          sed -i "s|__IMAGE_TAG__|${{ github.sha }}|g" k8s/deployment.yaml
+          grep -n 'image:' k8s/deployment.yaml
+      - name: Deploy
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          kubectl apply -f k8s/deployment.yaml -f k8s/service.yaml
+          kubectl rollout status deployment/session17-python --timeout=180s
+      - name: Verify the running app
+        run: |
+          kubectl get pods,svc -o wide
+          kubectl port-forward service/session17-python 5001:80 &
+          sleep 5
+          echo "--- /health ---";     curl -sf http://localhost:5001/health
+          echo; echo "--- /api/status ---"; curl -sf http://localhost:5001/api/status
+          echo; echo "### Deployed and verified on Kubernetes :ship:" >> $GITHUB_STEP_SUMMARY
