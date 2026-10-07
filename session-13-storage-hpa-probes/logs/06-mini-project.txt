@@ -1,0 +1,116 @@
+# Mini project: PVC + HPA + all three probes in a dedicated namespace.
+$ kubectl apply -f session-13-storage-hpa-probes/mini-project/namespace.yaml
+namespace/production-webapp unchanged
+
+$ kubectl apply -f session-13-storage-hpa-probes/mini-project/pvc.yaml -f session-13-storage-hpa-probes/mini-project/deployment.yaml -f session-13-storage-hpa-probes/mini-project/service.yaml -f session-13-storage-hpa-probes/mini-project/hpa.yaml
+persistentvolumeclaim/web-data created
+deployment.apps/web-app created
+service/web-service created
+horizontalpodautoscaler.autoscaling/web-app-hpa created
+
+$ kubectl rollout status deployment/web-app -n production-webapp --timeout=240s
+Waiting for deployment "web-app" rollout to finish: 0 of 2 updated replicas are available...
+Waiting for deployment "web-app" rollout to finish: 1 of 2 updated replicas are available...
+deployment "web-app" successfully rolled out
+
+# ===== all three pillars in one namespace =====
+$ kubectl get all,pvc,hpa -n production-webapp
+NAME                          READY   STATUS    RESTARTS   AGE
+pod/web-app-d45775485-76qbt   1/1     Running   0          9s
+pod/web-app-d45775485-7j5jh   1/1     Running   0          9s
+
+NAME                  TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)   AGE
+service/web-service   ClusterIP   10.105.6.198   <none>        80/TCP    9s
+
+NAME                      READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/web-app   2/2     2            2           9s
+
+NAME                                DESIRED   CURRENT   READY   AGE
+replicaset.apps/web-app-d45775485   2         2         2       9s
+
+NAME                                              REFERENCE            TARGETS              MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/web-app-hpa   Deployment/web-app   cpu: <unknown>/50%   2         5         2          9s
+
+NAME                             STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+persistentvolumeclaim/web-data   Bound    pvc-912dc038-97e1-4ddc-9fb7-6712c000e5c3   500Mi      RWO            standard       <unset>                 9s
+
+# 
+# ===== pillar 1: persistent storage (and a real defect it exposes) =====
+# Starting from a clean slate: the provisioner directory was removed on both nodes.
+$ kubectl get pods -n production-webapp -o custom-columns='POD:.metadata.name,NODE:.spec.nodeName' --no-headers
+web-app-d45775485-djm8d   minikube-m02
+web-app-d45775485-lk6vk   minikube
+
+# write a marker through the pod on minikube-m02 only:
+$ kubectl exec -n production-webapp web-app-d45775485-djm8d -- sh -c 'echo "order-1234 written on minikube-m02" > /data/orders.txt; cat /data/orders.txt'
+order-1234 written on minikube-m02
+
+# 
+# now read the SAME PVC path from the other pod, on node minikube:
+$ kubectl exec -n production-webapp web-app-d45775485-lk6vk -- ls -1 /data
+
+# EMPTY. Two pods, one PersistentVolumeClaim, two different sets of contents.
+# 
+# Root cause - inspect the PersistentVolume the claim is bound to:
+$ kubectl get pv pvc-1cee15b5-0cb3-49ca-9dd1-b9a01a882d49 -o jsonpath='provisioner : {.metadata.annotations.pv\.kubernetes\.io/provisioned-by}{"\n"}hostPath    : {.spec.hostPath.path}{"\n"}accessModes : {.spec.accessModes}{"\n"}nodeAffinity: [{.spec.nodeAffinity}]{"\n"}'
+provisioner : k8s.io/minikube-hostpath
+hostPath    : /tmp/hostpath-provisioner/production-webapp/web-data
+accessModes : ["ReadWriteOnce"]
+nodeAffinity: []
+
+# It is a hostPath volume with EMPTY nodeAffinity. Confirm on the nodes themselves:
+$ minikube ssh -n minikube-m02 -- 'ls -1 /tmp/hostpath-provisioner/production-webapp/web-data/ 2>/dev/null || echo "(empty)"' 2>/dev/null   # node minikube-m02
+orders.txt
+
+$ minikube ssh -n minikube -- 'ls -1 /tmp/hostpath-provisioner/production-webapp/web-data/ 2>/dev/null || echo "(empty)"' 2>/dev/null   # node minikube
+
+# 
+# VERDICT: minikube's hostpath provisioner creates the directory lazily on
+# whichever node mounts it, and sets no nodeAffinity. So a ReadWriteOnce PVC
+# shared by a multi-replica Deployment silently becomes one independent
+# directory PER NODE. There is no error and no event - just divergent data.
+# On a real cloud cluster the failure is louder (the second pod would hang in
+# ContainerCreating because an RWO EBS/PD volume cannot attach twice), which is
+# arguably safer than this silent split.
+# 
+# CORRECT PATTERNS: ReadWriteMany storage (NFS/EFS) for genuinely shared data;
+# a StatefulSet with volumeClaimTemplates for one volume per replica; or keep the
+# Deployment at replicas: 1. See mini-project/README-fix.md for a worked fix.
+# 
+# ===== storage DOES persist correctly when the node is held constant =====
+# deleting pod web-app-d45775485-djm8d (the one on minikube-m02, which holds the data):
+$ kubectl delete pod -n production-webapp web-app-d45775485-djm8d --wait=true
+pod "web-app-d45775485-djm8d" deleted from production-webapp namespace
+
+$ kubectl rollout status deployment/web-app -n production-webapp --timeout=240s
+Waiting for deployment "web-app" rollout to finish: 1 of 2 updated replicas are available...
+deployment "web-app" successfully rolled out
+
+# its replacement on the same node is web-app-d45775485-r4sq7:
+$ kubectl exec -n production-webapp web-app-d45775485-r4sq7 -- cat /data/orders.txt
+order-1234 written on minikube-m02
+
+# the PVC outlived the pod - persistence works; it is the CROSS-NODE sharing
+# assumption that is broken, not persistence itself.
+# 
+# ===== the fix: StatefulSet with volumeClaimTemplates (one volume per replica) =====
+$ kubectl apply -f session-13-storage-hpa-probes/mini-project/statefulset-fix.yaml
+statefulset.apps/web-app-sts created
+
+$ kubectl rollout status statefulset/web-app-sts -n production-webapp --timeout=300s
+Waiting for 2 pods to be ready...
+Waiting for 1 pods to be ready...
+Waiting for 1 pods to be ready...
+partitioned roll out complete: 2 new pods have been updated...
+
+$ kubectl get pods -n production-webapp -l app=web-app-sts -o custom-columns='POD:.metadata.name,NODE:.spec.nodeName' --no-headers
+web-app-sts-0   minikube-m02
+web-app-sts-1   minikube
+
+$ kubectl get pvc -n production-webapp
+NAME                     STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+web-data                 Bound    pvc-1cee15b5-0cb3-49ca-9dd1-b9a01a882d49   500Mi      RWO            standard       <unset>                 105s
+web-data-web-app-sts-0   Bound    pvc-e2378be4-3ac7-42b4-a08e-e3d5c2e34627   500Mi      RWO            standard       <unset>                 18s
+web-data-web-app-sts-1   Bound    pvc-c2fb0c32-2f7b-4610-bfd8-e3b669fe6e1f   500Mi      RWO            standard       <unset>                 9s
+
+# each ordinal now owns a SEPARATE PVC, so no volume is shared and nothing diverges.

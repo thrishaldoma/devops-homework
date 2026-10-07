@@ -1,0 +1,92 @@
+# Session 16 - CD pipeline.
+#
+# Runs only after CI has succeeded on main (workflow_run), which is what makes
+# this Continuous *Delivery* rather than just another build: the deploy stage
+# cannot start unless the test/lint/build/scan gates all passed.
+#
+#   CI (success on main) ──> package ──> deploy-staging ──> deploy-production
+#                                                              (manual gate)
+name: CD
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  APP_DIR: session-16-github-actions
+  IMAGE_NAME: calculator
+
+jobs:
+  package:
+    name: Package image
+    # Only proceed if the CI run actually succeeded.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Derive image tag
+        id: meta
+        run: echo "tag=v1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and export image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.APP_DIR }}
+          push: false
+          tags: ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+          outputs: type=docker,dest=/tmp/image.tar
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-image
+          path: /tmp/image.tar
+          retention-days: 7
+
+  deploy-staging:
+    name: Deploy to staging
+    needs: package
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download image
+        uses: actions/download-artifact@v4
+        with:
+          name: container-image
+          path: /tmp
+      - name: Load image
+        run: docker load --input /tmp/image.tar && docker images ${{ env.IMAGE_NAME }}
+      - name: Smoke test the image
+        run: |
+          echo "Running the released image to verify it actually works..."
+          docker run --rm ${{ env.IMAGE_NAME }}:${{ needs.package.outputs.image-tag }} \
+            python -c "from app.calculator import add, divide; assert add(10,5)==15; assert divide(10,5)==2; print('smoke test OK')"
+      - name: Deploy
+        run: |
+          echo "Deploying ${{ env.IMAGE_NAME }}:${{ needs.package.outputs.image-tag }} to STAGING"
+          echo "### Deployed to staging :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "Image: \`${{ env.IMAGE_NAME }}:${{ needs.package.outputs.image-tag }}\`" >> $GITHUB_STEP_SUMMARY
+
+  deploy-production:
+    name: Deploy to production
+    needs: [package, deploy-staging]
+    runs-on: ubuntu-latest
+    # A GitHub "environment" is where a required-reviewer gate would be attached,
+    # so production deploys wait for a human approval.
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy
+        run: |
+          echo "Deploying ${{ env.IMAGE_NAME }}:${{ needs.package.outputs.image-tag }} to PRODUCTION"
+          echo "### Deployed to production :tada:" >> $GITHUB_STEP_SUMMARY
+          echo "Image: \`${{ env.IMAGE_NAME }}:${{ needs.package.outputs.image-tag }}\`" >> $GITHUB_STEP_SUMMARY
+      - name: Verify kubernetes manifests are present
+        run: |
+          echo "Manifests that would be applied by a cluster-connected runner:"
+          ls -1 ${{ env.APP_DIR }}/k8s/ 2>/dev/null || echo "(see session-17 for the cluster deployment stage)"

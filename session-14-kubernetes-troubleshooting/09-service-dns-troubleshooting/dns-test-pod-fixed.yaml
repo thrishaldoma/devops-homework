@@ -1,0 +1,14 @@
+# CORRECTED diagnostic client.
+# The course's dns-test-pod.yaml pins registry.k8s.io/e2e-test-images/dnsutils:1.3,
+# which does not pull on this cluster (ImagePullBackOff - no arm64 manifest).
+# curlimages/curl is multi-arch and ships BusyBox, so it provides both
+# `curl` and `nslookup` - everything this drill needs.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dns-test
+spec:
+  containers:
+    - name: dns-test
+      image: curlimages/curl:8.10.1
+      command: ["sleep", "3600"]

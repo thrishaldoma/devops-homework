@@ -1,0 +1,90 @@
+# ######## ISSUE: 'the Service doesn't work' - is it DNS, or is it routing? ########
+# 
+# NOTE ON THE COURSE MANIFESTS: two files in this folder are themselves broken.
+#   - dns-test-pod.yaml pins registry.k8s.io/e2e-test-images/dnsutils:1.3,
+#     which has no arm64 manifest and lands in ImagePullBackOff:
+$ docker manifest inspect registry.k8s.io/e2e-test-images/dnsutils:1.3 2>&1 | head -1
+no such manifest: registry.k8s.io/e2e-test-images/dnsutils:1.3
+
+#   - service.yaml, the supposed FIX, selects app=web-ahsgdf (a typo), so it has
+#     no endpoints either. Corrected copies are dns-test-pod-fixed.yaml and
+#     service-fixed.yaml; both are used below.
+# 
+# --- 1. IDENTIFY: the app is up, but the Service returns nothing ---
+$ kubectl get pods -l app=web -o wide
+NAME                   READY   STATUS    RESTARTS   AGE    IP            NODE           NOMINATED NODE   READINESS GATES
+web-557577df75-kb6fk   1/1     Running   0          4m3s   10.244.0.14   minikube       <none>           <none>
+web-557577df75-xjpr7   1/1     Running   0          4m3s   10.244.1.31   minikube-m02   <none>           <none>
+
+$ kubectl exec dns-test -- curl -sS --max-time 5 http://broken-service 2>&1 | head -2
+curl: (7) Failed to connect to broken-service port 80 after 1 ms: Could not connect to server
+command terminated with exit code 7
+
+# 
+# --- 2. INVESTIGATE: separate DNS from routing ---
+# step A - does the NAME resolve?
+$ kubectl exec dns-test -- nslookup broken-service | grep -A 2 'Name:'
+Name:	broken-service.default.svc.cluster.local
+Address: 10.100.104.254
+
+$ kubectl get svc broken-service -o jsonpath='{.spec.clusterIP}'
+10.100.104.254
+
+# It resolves and has a ClusterIP, so DNS is NOT the problem.
+# step B - does the Service have any ENDPOINTS? (the decisive check)
+$ kubectl describe svc broken-service | grep -E 'Selector:|Endpoints:'
+Selector:                 app=does-not-exist
+Endpoints:                
+
+$ kubectl get endpointslice -l kubernetes.io/service-name=broken-service -o custom-columns='SLICE:.metadata.name,ENDPOINTS:.endpoints[*].addresses'
+SLICE                  ENDPOINTS
+broken-service-zx6rc   <none>
+
+# 
+# --- 3. ROOT CAUSE: the Service selector matches no pod ---
+$ kubectl get svc broken-service -o jsonpath='service selector : {.spec.selector}{"\n"}'
+service selector : {"app":"does-not-exist"}
+
+$ kubectl get pods -l app=web -o jsonpath='actual pod labels: {.items[0].metadata.labels}{"\n"}'
+actual pod labels: {"app":"web","pod-template-hash":"557577df75"}
+
+# selector app=does-not-exist vs pod label app=web -> zero endpoints.
+# A Service with no endpoints STILL resolves in DNS and STILL has a ClusterIP.
+# That is why 'nslookup works, so DNS is fine' sends people down the wrong path:
+# connections fail at the routing layer, not the naming layer.
+# 
+# --- 4. FIX ---
+$ diff session-14-kubernetes-troubleshooting/09-service-dns-troubleshooting/service.yaml session-14-kubernetes-troubleshooting/09-service-dns-troubleshooting/service-fixed.yaml
+0a1,4
+> # CORRECTED Service.
+> # The course's service.yaml selects `app: web-ahsgdf`, which matches no pod, so it
+> # is just as broken as broken-service.yaml. The Deployment labels its pods
+> # `app: web`, so that is what the selector must be.
+3d6
+< 
+6d8
+< 
+9,10c11
+<     app: web-ahsgdf
+< 
+---
+>     app: web
+14,15c15
+< 
+<   type: ClusterIP
+\ No newline at end of file
+---
+>   type: ClusterIP
+
+$ kubectl apply -f session-14-kubernetes-troubleshooting/09-service-dns-troubleshooting/service-fixed.yaml
+service/web-service created
+
+# --- 5. VERIFY ---
+$ kubectl get endpointslice -l kubernetes.io/service-name=web-service -o custom-columns='SLICE:.metadata.name,ENDPOINTS:.endpoints[*].addresses'
+SLICE               ENDPOINTS
+web-service-ckz9f   [10.244.1.31],[10.244.0.14]
+
+$ kubectl exec dns-test -- curl -sS --max-time 5 http://web-service | grep -i '<title>'
+<title>Welcome to nginx!</title>
+
+# endpoints populated and traffic flows.

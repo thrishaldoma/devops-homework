@@ -1,0 +1,95 @@
+# The eight commands that answer: 'my app is not working - why?'
+# 
+# ===== 1. kubectl get - WHAT exists, and in what state? =====
+$ kubectl get pods
+NAME            READY   STATUS    RESTARTS   AGE
+describe-demo   1/1     Running   0          46s
+events-demo     1/1     Running   0          46s
+exec-demo       1/1     Running   0          46s
+get-demo        1/1     Running   0          65s
+logs-demo       1/1     Running   0          46s
+
+# ===== 2. kubectl get -o wide - WHERE is it running, and on which IP? =====
+$ kubectl get pods -o wide
+NAME            READY   STATUS    RESTARTS   AGE   IP            NODE           NOMINATED NODE   READINESS GATES
+describe-demo   1/1     Running   0          46s   10.244.1.23   minikube-m02   <none>           <none>
+events-demo     1/1     Running   0          46s   10.244.1.26   minikube-m02   <none>           <none>
+exec-demo       1/1     Running   0          46s   10.244.1.25   minikube-m02   <none>           <none>
+get-demo        1/1     Running   0          65s   10.244.1.22   minikube-m02   <none>           <none>
+logs-demo       1/1     Running   0          46s   10.244.1.24   minikube-m02   <none>           <none>
+
+# ===== 3. kubectl describe - WHY is it in that state? (Events live here) =====
+$ kubectl describe pod describe-demo | tail -18
+Volumes:
+  kube-api-access-rxz67:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+QoS Class:                   BestEffort
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type    Reason     Age   From               Message
+  ----    ------     ----  ----               -------
+  Normal  Scheduled  46s   default-scheduler  Successfully assigned default/describe-demo to minikube-m02
+  Normal  Pulled     45s   kubelet            spec.containers{nginx}: Container image "nginx:1.27" already present on machine and can be accessed by the pod
+  Normal  Created    45s   kubelet            spec.containers{nginx}: Container created
+  Normal  Started    45s   kubelet            spec.containers{nginx}: Container started
+
+# ===== 4. kubectl logs - what did the APPLICATION itself say? =====
+$ kubectl logs logs-demo --tail=6
+Application is healthy
+Application is healthy
+Application is healthy
+Application is healthy
+Application is healthy
+Application is healthy
+
+# ===== 5. kubectl exec - get inside the container and look around =====
+$ kubectl exec exec-demo -- sh -c 'hostname; echo; cat /etc/resolv.conf'
+exec-demo
+
+search default.svc.cluster.local svc.cluster.local cluster.local
+nameserver 10.96.0.10
+options ndots:5
+
+# ===== 6. kubectl events - a cluster-wide timeline =====
+$ kubectl events --for pod/events-demo 2>&1 | head -8
+LAST SEEN   TYPE     REASON      OBJECT            MESSAGE
+46s         Normal   Scheduled   Pod/events-demo   Successfully assigned default/events-demo to minikube-m02
+45s         Normal   Pulled      Pod/events-demo   Container image "nginx:1.27" already present on machine and can be accessed by the pod
+45s         Normal   Created     Pod/events-demo   Container created
+45s         Normal   Started     Pod/events-demo   Container started
+
+# ===== 7. kubectl explain - the API schema, no internet needed =====
+$ kubectl explain pod.spec.containers.resources | head -12
+KIND:       Pod
+VERSION:    v1
+
+FIELD: resources <ResourceRequirements>
+
+
+DESCRIPTION:
+    Compute Resources required by this container. Cannot be updated. More info:
+    https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+    ResourceRequirements describes the compute resource requirements.
+    
+FIELDS:
+
+# ===== 8. kubectl top - what is it ACTUALLY consuming? =====
+$ kubectl top pods
+NAME       CPU(cores)   MEMORY(bytes)   
+get-demo   3m           11Mi            
+
+$ kubectl top nodes
+NAME           CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+minikube       129m         0%       935Mi           11%         
+minikube-m02   46m          0%       454Mi           5%          
+
+# 
+# TRIAGE ORDER: get (what/where) -> describe (why, scheduling + kubelet events)
+# -> logs (application's own words) -> exec (prove it from inside).
+# describe answers infrastructure failures; logs answer application failures.

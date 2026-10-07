@@ -1,0 +1,12 @@
+# Service used to prove that a failing readiness probe removes a pod from
+# the Service's endpoints (without restarting the pod).
+apiVersion: v1
+kind: Service
+metadata:
+  name: readiness-demo-svc
+spec:
+  selector:
+    app: readiness-demo
+  ports:
+    - port: 80
+      targetPort: 80

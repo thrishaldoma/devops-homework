@@ -1,0 +1,51 @@
+# ######## ISSUE: Pod stuck in Pending ########
+# --- 1. IDENTIFY ---
+$ kubectl apply -f session-14-kubernetes-troubleshooting/08-pending-pods/broken-pod.yaml
+pod/pending-demo created
+
+$ kubectl get pod pending-demo
+NAME           READY   STATUS    RESTARTS   AGE
+pending-demo   0/1     Pending   0          12s
+
+# --- 2. INVESTIGATE: a Pending pod has no node, so the SCHEDULER is the suspect ---
+$ kubectl describe pod pending-demo | grep -A 5 'Events:'
+Events:
+  Type     Reason            Age   From               Message
+  ----     ------            ----  ----               -------
+  Warning  FailedScheduling  12s   default-scheduler  0/2 nodes are available: 2 node(s) didn't match Pod's node affinity/selector. preemption: 0/2 nodes are available: 2 Preemption is not helpful for scheduling.
+
+$ kubectl get pod pending-demo -o jsonpath='nodeSelector: {.spec.nodeSelector}{"\n"}'
+nodeSelector: {"kubernetes.io/hostname":"node-that-does-not-exist"}
+
+# --- 3. ROOT CAUSE ---
+$ kubectl get nodes --show-labels | awk '{print $1, $6}' | head -3
+NAME LABELS
+minikube beta.kubernetes.io/arch=arm64,beta.kubernetes.io/os=linux,kubernetes.io/arch=arm64,kubernetes.io/hostname=minikube,kubernetes.io/os=linux,minikube.k8s.io/commit=7a9f6a841470a207de8cf4bafcccee0969d8ba10,minikube.k8s.io/name=minikube,minikube.k8s.io/primary=true,minikube.k8s.io/updated_at=2026_09_18T11_35_25_0700,minikube.k8s.io/version=v1.39.0,node-role.kubernetes.io/control-plane=,node.kubernetes.io/exclude-from-external-load-balancers=
+minikube-m02 beta.kubernetes.io/arch=arm64,beta.kubernetes.io/os=linux,kubernetes.io/arch=arm64,kubernetes.io/hostname=minikube-m02,kubernetes.io/os=linux,minikube.k8s.io/commit=7a9f6a841470a207de8cf4bafcccee0969d8ba10,minikube.k8s.io/name=minikube,minikube.k8s.io/primary=false,minikube.k8s.io/updated_at=2026_09_18T11_35_37_0700,minikube.k8s.io/version=v1.39.0
+
+# The pod demands kubernetes.io/hostname=node-that-does-not-exist. No such node
+# exists, so the scheduler can never place it. Pending = not yet scheduled.
+# --- 4. FIX: remove the impossible nodeSelector ---
+$ diff session-14-kubernetes-troubleshooting/08-pending-pods/broken-pod.yaml session-14-kubernetes-troubleshooting/08-pending-pods/fixed-pod.yaml
+8,10d7
+<   nodeSelector:
+<     kubernetes.io/hostname: node-that-does-not-exist
+< 
+
+$ kubectl delete -f session-14-kubernetes-troubleshooting/08-pending-pods/broken-pod.yaml --wait=true
+pod "pending-demo" deleted from default namespace
+
+$ kubectl apply -f session-14-kubernetes-troubleshooting/08-pending-pods/fixed-pod.yaml
+pod/pending-demo created
+
+# --- 5. VERIFY ---
+$ kubectl wait --for=condition=Ready pod/pending-demo --timeout=180s
+pod/pending-demo condition met
+
+$ kubectl get pod pending-demo -o wide
+NAME           READY   STATUS    RESTARTS   AGE   IP            NODE           NOMINATED NODE   READINESS GATES
+pending-demo   1/1     Running   0          0s    10.244.1.30   minikube-m02   <none>           <none>
+
+$ kubectl delete -f session-14-kubernetes-troubleshooting/08-pending-pods/fixed-pod.yaml --wait=false
+pod "pending-demo" deleted from default namespace
+

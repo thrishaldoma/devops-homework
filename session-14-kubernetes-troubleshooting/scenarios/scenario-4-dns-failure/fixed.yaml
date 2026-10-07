@@ -1,0 +1,35 @@
+# FIX: point at a hostname that resolves, and add a readiness probe so a failed
+# dependency actually shows up as NotReady instead of a happy-looking Running pod.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels: { tier: triage-gauntlet }
+spec:
+  selector: { app: postgres }
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fail-4-dns-failure-pod
+  labels: { tier: triage-gauntlet, scenario: dns-failure }
+spec:
+  containers:
+    - name: client
+      image: curlimages/curl:8.10.1
+      command: ["sh", "-c"]
+      args:
+        - |
+          echo "Resolving internal database..."
+          nslookup postgres.default.svc.cluster.local || exit 1
+          echo "Hostname resolved successfully."
+          touch /tmp/ready
+          sleep 3600
+      readinessProbe:
+        exec:
+          command: ["cat", "/tmp/ready"]
+        initialDelaySeconds: 3
+        periodSeconds: 5

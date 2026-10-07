@@ -1,0 +1,111 @@
+# A PersistentVolume is the actual storage; a PersistentVolumeClaim is a request for it.
+$ kubectl apply -f session-13-storage-hpa-probes/02-persistent-storage/pv.yaml -f session-13-storage-hpa-probes/02-persistent-storage/pvc.yaml
+persistentvolume/student-pv created
+persistentvolumeclaim/student-pvc created
+
+$ kubectl get pv student-pv
+NAME         CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   VOLUMEATTRIBUTESCLASS   REASON   AGE
+student-pv   1Gi        RWO            Retain           Available                          <unset>                          6s
+
+$ kubectl get pvc student-pvc
+NAME          STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+student-pvc   Bound    pvc-233df8df-baf7-48ca-a031-69755f785581   500Mi      RWO            standard       <unset>                 6s
+
+# LOOK CLOSELY: student-pvc did NOT bind to student-pv.
+$ kubectl get pvc student-pvc -o custom-columns='PVC:.metadata.name,STATUS:.status.phase,VOLUME:.spec.volumeName,CLASS:.spec.storageClassName'
+PVC           STATUS   VOLUME                                     CLASS
+student-pvc   Bound    pvc-233df8df-baf7-48ca-a031-69755f785581   standard
+
+$ kubectl get pv --no-headers | awk '{print $1, $5, $6, $7}'
+pvc-233df8df-baf7-48ca-a031-69755f785581 Bound default/student-pvc standard
+student-pv Available <unset> 6s
+
+# 
+# ROOT CAUSE: the PVC omits storageClassName entirely, so Kubernetes applies the
+# DEFAULT StorageClass (minikube ships 'standard' as default) and dynamically
+# provisions a brand-new volume. The hand-made student-pv is simply never considered.
+$ kubectl get storageclass
+NAME                 PROVISIONER                RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
+standard (default)   k8s.io/minikube-hostpath   Delete          Immediate           false                  19d
+
+# 
+# ===== FIX: set storageClassName: "" on BOTH the PV and the PVC =====
+$ diff session-13-storage-hpa-probes/02-persistent-storage/pvc.yaml session-13-storage-hpa-probes/02-persistent-storage/pvc-static.yaml | head -20
+0a1,4
+> # CORRECTED claim. An EMPTY storageClassName means "do not use the default
+> # StorageClass" -> the control plane looks for an existing, matching PV.
+> # OMITTING the field entirely is what causes the default class to be used
+> # and a brand-new volume to be provisioned (see pvc.yaml).
+4c8
+<   name: student-pvc
+---
+>   name: student-pvc-static
+7a12
+>   storageClassName: ""
+
+$ kubectl apply -f session-13-storage-hpa-probes/02-persistent-storage/pv-static.yaml -f session-13-storage-hpa-probes/02-persistent-storage/pvc-static.yaml
+persistentvolume/student-pv-static created
+persistentvolumeclaim/student-pvc-static created
+
+$ kubectl get pvc student-pvc-static -o custom-columns='PVC:.metadata.name,STATUS:.status.phase,VOLUME:.spec.volumeName,CLASS:.spec.storageClassName'
+PVC                  STATUS   VOLUME       CLASS
+student-pvc-static   Bound    student-pv   
+
+$ kubectl get pv student-pv-static -o custom-columns='PV:.metadata.name,STATUS:.status.phase,CLAIM:.spec.claimRef.name,RECLAIM:.spec.persistentVolumeReclaimPolicy'
+PV                  STATUS      CLAIM    RECLAIM
+student-pv-static   Available   <none>   Retain
+
+# NOTE WHAT ACTUALLY BOUND: student-pvc-static -> student-pv (the ORIGINAL volume),
+# not the new student-pv-static. That is the real lesson:
+$ kubectl get pv -o custom-columns='PV:.metadata.name,CLASS:.spec.storageClassName,STATUS:.status.phase,CLAIM:.spec.claimRef.name'
+PV                                         CLASS      STATUS      CLAIM
+pvc-233df8df-baf7-48ca-a031-69755f785581   standard   Bound       student-pvc
+student-pv                                 <none>     Bound       student-pvc-static
+student-pv-static                          <none>     Available   <none>
+
+# 
+# student-pv was always bindable - it has no storageClassName, i.e. class "".
+# The defect was ONLY on the claim side. A PVC that OMITS storageClassName gets
+# the default class; a PVC that sets it to "" asks for an unclassed PV, and the
+# control plane then matched it to student-pv on size + access mode.
+# So pv-static.yaml was not actually needed - it sits Available, proving the point.
+# 
+# Rule of thumb:
+#   omitted storageClassName  -> default StorageClass -> DYNAMIC provisioning
+#   storageClassName: ""      -> no class            -> STATIC binding to an existing PV
+# 
+# ===== mount the bound claim in a pod =====
+$ kubectl apply -f session-13-storage-hpa-probes/02-persistent-storage/pod.yaml
+pod/storage-demo created
+
+$ kubectl wait --for=condition=Ready pod/storage-demo --timeout=120s
+pod/storage-demo condition met
+
+$ kubectl exec storage-demo -- sh -c 'echo "persisted via PVC" > /data/pvc.txt; cat /data/pvc.txt'
+persisted via PVC
+
+$ kubectl describe pod storage-demo | grep -A 4 'Volumes:'
+Volumes:
+  persistent-storage:
+    Type:       PersistentVolumeClaim (a reference to a PersistentVolumeClaim in the same namespace)
+    ClaimName:  student-pvc
+    ReadOnly:   false
+
+# 
+# ===== does the data really outlive the pod? =====
+$ kubectl delete pod storage-demo --wait=true
+pod "storage-demo" deleted from default namespace
+
+$ kubectl apply -f session-13-storage-hpa-probes/02-persistent-storage/pod.yaml
+pod/storage-demo created
+
+$ kubectl wait --for=condition=Ready pod/storage-demo --timeout=120s
+pod/storage-demo condition met
+
+$ kubectl exec storage-demo -- cat /data/pvc.txt
+persisted via PVC
+
+# same file, new pod - the PVC outlived the pod that wrote it.
+$ kubectl delete -f session-13-storage-hpa-probes/02-persistent-storage/pod.yaml --wait=false
+pod "storage-demo" deleted from default namespace
+

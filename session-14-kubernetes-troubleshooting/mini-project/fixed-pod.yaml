@@ -1,0 +1,13 @@
+# FIX for broken-pod.yaml: use a tag that exists.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: project-broken-pod
+  labels:
+    app: troubleshooting-app     # also joins the Service's endpoint set
+spec:
+  containers:
+    - name: app
+      image: nginx:1.27
+      ports:
+        - containerPort: 80

@@ -1,0 +1,120 @@
+# Session 16 - CI pipeline for the calculator service.
+#
+# Job graph (fan-out after test, so lint/build/security run in parallel):
+#
+#            ┌──> lint
+#   test ────┼──> build ──> docker
+#            └──> security-scan
+#
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'session-16-github-actions/**'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:          # lets the pipeline be triggered by hand
+
+env:
+  APP_DIR: session-16-github-actions
+  IMAGE_NAME: calculator
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install dependencies
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run tests
+        working-directory: ${{ env.APP_DIR }}
+        run: pytest -v --junitxml=test-results.xml
+      - name: Upload test results
+        if: always()           # publish results even when the tests fail
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ${{ env.APP_DIR }}/test-results.xml
+
+  lint:
+    name: Lint
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install flake8
+      - name: flake8
+        working-directory: ${{ env.APP_DIR }}
+        run: flake8 app/ tests/ --max-line-length=120 --count --statistics
+
+  build:
+    name: Build artifact
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run build script
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          chmod +x build.sh
+          ./build.sh
+      - name: Show build info
+        working-directory: ${{ env.APP_DIR }}
+        run: cat build/build-info.txt
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: calculator-build
+          path: ${{ env.APP_DIR }}/build/
+          retention-days: 7
+
+  security-scan:
+    name: Secret scan
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for committed secrets
+        run: |
+          echo "Scanning for files that should never be committed..."
+          if find . -type f \( -name '*.pem' -o -name '*.key' -o -name '.env' \) \
+               -not -path './.git/*' | grep -q .; then
+            echo "::error::Potential secret material found in the repository"
+            find . -type f \( -name '*.pem' -o -name '*.key' -o -name '.env' \) -not -path './.git/*'
+            exit 1
+          fi
+          echo "No sensitive files found."
+
+  docker:
+    name: Docker build
+    needs: [lint, build, security-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image (tests run inside the build)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.APP_DIR }}
+          push: false                     # CD handles publishing
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Summary
+        run: |
+          echo "### CI complete :white_check_mark:" >> $GITHUB_STEP_SUMMARY
+          echo "Image \`${{ env.IMAGE_NAME }}:${{ github.sha }}\` built from commit ${{ github.sha }}." >> $GITHUB_STEP_SUMMARY

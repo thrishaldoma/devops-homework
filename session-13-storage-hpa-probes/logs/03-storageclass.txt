@@ -1,0 +1,43 @@
+# StorageClass = a template for provisioning storage ON DEMAND.
+$ kubectl get storageclass
+NAME                 PROVISIONER                RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
+standard (default)   k8s.io/minikube-hostpath   Delete          Immediate           false                  19d
+
+$ kubectl describe storageclass standard | head -8
+Name:            standard
+IsDefaultClass:  Yes
+Annotations:     kubectl.kubernetes.io/last-applied-configuration={"apiVersion":"storage.k8s.io/v1","kind":"StorageClass","metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"},"labels":{"addonmanager.kubernetes.io/mode":"EnsureExists"},"name":"standard"},"provisioner":"k8s.io/minikube-hostpath"}
+,storageclass.kubernetes.io/is-default-class=true
+Provisioner:           k8s.io/minikube-hostpath
+Parameters:            <none>
+AllowVolumeExpansion:  <unset>
+MountOptions:          <none>
+
+# a PVC naming a StorageClass triggers DYNAMIC provisioning - no PV written by hand:
+$ cat session-13-storage-hpa-probes/03-storageclass/pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dynamic-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 500Mi
+
+$ kubectl apply -f session-13-storage-hpa-probes/03-storageclass/pvc.yaml
+persistentvolumeclaim/dynamic-pvc created
+
+$ kubectl get pvc dynamic-pvc
+NAME          STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+dynamic-pvc   Bound    pvc-68c37315-6d5a-42c2-9140-ed29f60656b4   500Mi      RWO            standard       <unset>                 6s
+
+# the provisioner created a matching PV automatically:
+$ kubectl get pv -o custom-columns='PV:.metadata.name,CLASS:.spec.storageClassName,CLAIM:.spec.claimRef.name,RECLAIM:.spec.persistentVolumeReclaimPolicy' | grep -E 'PV|dynamic'
+PV                                         CLASS      CLAIM                RECLAIM
+pvc-68c37315-6d5a-42c2-9140-ed29f60656b4   standard   dynamic-pvc          Delete
+
+# RECLAIM POLICY matters: 'standard' uses Delete, so the volume is destroyed with
+# the claim. Our hand-made student-pv used Retain, which keeps the data.

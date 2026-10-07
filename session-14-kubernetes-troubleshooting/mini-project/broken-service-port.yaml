@@ -1,0 +1,14 @@
+# BROKEN ON PURPOSE: the selector is correct, so the Service HAS endpoints -
+# but targetPort 8080 is not a port anything is listening on (nginx serves 80).
+# This fails differently from a selector mismatch and is easy to misdiagnose.
+apiVersion: v1
+kind: Service
+metadata:
+  name: troubleshooting-service
+spec:
+  selector:
+    app: troubleshooting-app
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP

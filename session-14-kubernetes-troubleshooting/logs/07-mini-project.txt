@@ -1,0 +1,115 @@
+# A deliberate end-to-end triage walk: deploy -> observe -> break -> investigate
+# -> root cause -> fix -> verify.
+# 
+# ===== 1. deploy the application =====
+$ kubectl apply -f session-14-kubernetes-troubleshooting/mini-project/deployment.yaml -f session-14-kubernetes-troubleshooting/mini-project/service.yaml
+deployment.apps/troubleshooting-app created
+service/troubleshooting-service created
+
+$ kubectl rollout status deployment/troubleshooting-app --timeout=180s
+Waiting for deployment "troubleshooting-app" rollout to finish: 0 of 2 updated replicas are available...
+Waiting for deployment "troubleshooting-app" rollout to finish: 1 of 2 updated replicas are available...
+deployment "troubleshooting-app" successfully rolled out
+
+# ===== 2. observe a HEALTHY baseline (so you know what 'good' looks like) =====
+$ kubectl get pods -l app=troubleshooting-app -o wide
+NAME                                   READY   STATUS    RESTARTS   AGE   IP            NODE           NOMINATED NODE   READINESS GATES
+troubleshooting-app-59d4957864-qslss   1/1     Running   0          1s    10.244.0.16   minikube       <none>           <none>
+troubleshooting-app-59d4957864-r7pvb   1/1     Running   0          1s    10.244.1.44   minikube-m02   <none>           <none>
+
+$ kubectl describe svc troubleshooting-service | grep -E 'Selector:|TargetPort:|Endpoints:'
+Selector:                 app=troubleshooting-app
+TargetPort:               80/TCP
+Endpoints:                10.244.1.44:80,10.244.0.16:80
+
+$ kubectl get endpointslice -l kubernetes.io/service-name=troubleshooting-service -o custom-columns='SLICE:.metadata.name,ENDPOINTS:.endpoints[*].addresses'
+SLICE                           ENDPOINTS
+troubleshooting-service-2bzv7   [10.244.1.44],[10.244.0.16]
+
+$ kubectl exec troubleshooting-app-59d4957864-qslss -- curl -s localhost | grep -i '<title>'
+<title>Welcome to nginx!</title>
+
+# Baseline captured: 2 running pods, 2 endpoints, nginx answering on localhost.
+# 
+# ===== 3. break it =====
+$ kubectl apply -f session-14-kubernetes-troubleshooting/mini-project/broken-pod.yaml
+pod/project-broken-pod created
+
+$ kubectl get pods
+NAME                                   READY   STATUS         RESTARTS   AGE
+dns-test                               1/1     Running        0          7m9s
+project-broken-pod                     0/1     ErrImagePull   0          35s
+troubleshooting-app-59d4957864-qslss   1/1     Running        0          36s
+troubleshooting-app-59d4957864-r7pvb   1/1     Running        0          36s
+
+# Note the healthy pods are UNAFFECTED - a broken standalone pod does not take
+# the Deployment down. Scope the blast radius before you panic.
+# 
+# ===== 4. investigate the broken pod =====
+$ kubectl describe pod project-broken-pod | grep -A 6 'Events:' | tail -4
+  Normal   Scheduled  58s                default-scheduler  Successfully assigned default/project-broken-pod to minikube-m02
+  Normal   BackOff    25s (x2 over 54s)  kubelet            spec.containers{app}: Back-off pulling image "nginx:this-tag-does-not-exist"
+  Warning  Failed     25s (x2 over 54s)  kubelet            spec.containers{app}: Error: ImagePullBackOff
+  Normal   Pulling    11s (x3 over 58s)  kubelet            spec.containers{app}: Pulling image "nginx:this-tag-does-not-exist"
+
+$ kubectl logs project-broken-pod 2>&1 | head -2
+Error from server (BadRequest): container "app" in pod "project-broken-pod" is waiting to start: trying and failing to pull image
+
+# ===== 5. root cause =====
+$ kubectl get pod project-broken-pod -o jsonpath='image: {.spec.containers[0].image}{"\n"}'
+image: nginx:this-tag-does-not-exist
+
+# Tag 'this-tag-does-not-exist' is not published. No container was ever created,
+# which is why logs are unavailable and only Events carry the diagnosis.
+# ===== 6. fix and verify =====
+$ kubectl delete -f session-14-kubernetes-troubleshooting/mini-project/broken-pod.yaml --wait=true
+pod "project-broken-pod" deleted from default namespace
+
+$ kubectl apply -f session-14-kubernetes-troubleshooting/mini-project/fixed-pod.yaml
+pod/project-broken-pod created
+
+$ kubectl wait --for=condition=Ready pod/project-broken-pod --timeout=180s
+pod/project-broken-pod condition met
+
+$ kubectl get pods -l app=troubleshooting-app
+NAME                                   READY   STATUS    RESTARTS   AGE
+project-broken-pod                     1/1     Running   0          0s
+troubleshooting-app-59d4957864-qslss   1/1     Running   0          60s
+troubleshooting-app-59d4957864-r7pvb   1/1     Running   0          60s
+
+# the repaired pod carries app=troubleshooting-app, so it joined the Service too:
+$ kubectl get endpointslice -l kubernetes.io/service-name=troubleshooting-service -o custom-columns='ENDPOINTS:.endpoints[*].addresses'
+ENDPOINTS
+[10.244.1.44],[10.244.0.16],[10.244.1.46]
+
+# 
+# ===== 7. SECOND BREAK: a targetPort mismatch (fails differently) =====
+$ kubectl apply -f session-14-kubernetes-troubleshooting/mini-project/broken-service-port.yaml
+service/troubleshooting-service configured
+
+# SYMPTOM: endpoints EXIST this time, so the usual selector check looks fine:
+$ kubectl describe svc troubleshooting-service | grep -E 'Selector:|TargetPort:|Endpoints:'
+Selector:                 app=troubleshooting-app
+TargetPort:               8080/TCP
+Endpoints:                10.244.1.44:8080,10.244.0.16:8080,10.244.1.46:8080
+
+$ kubectl exec dns-test -- curl -sS --max-time 5 http://troubleshooting-service 2>&1 | head -2
+curl: (7) Failed to connect to troubleshooting-service port 80 after 4 ms: Could not connect to server
+command terminated with exit code 7
+
+# ROOT CAUSE: endpoints are listed as :8080 but nginx listens on :80, so every
+# connection is refused. Selector correct, targetPort wrong.
+# DIAGNOSTIC RULE:
+#   no endpoints at all        -> selector / label mismatch
+#   endpoints present, refused -> targetPort / containerPort mismatch
+$ kubectl apply -f session-14-kubernetes-troubleshooting/mini-project/service.yaml
+service/troubleshooting-service configured
+
+# ===== verify the repair =====
+$ kubectl describe svc troubleshooting-service | grep -E 'TargetPort:|Endpoints:'
+TargetPort:               80/TCP
+Endpoints:                10.244.1.44:80,10.244.0.16:80,10.244.1.46:80
+
+$ kubectl exec dns-test -- curl -sS --max-time 5 http://troubleshooting-service | grep -i '<title>'
+<title>Welcome to nginx!</title>
+

@@ -1,0 +1,61 @@
+# ===== emptyDir: scratch space that lives and dies WITH the pod =====
+$ kubectl apply -f session-13-storage-hpa-probes/01-volumes/emptydir-pod.yaml
+pod/emptydir-demo created
+
+$ kubectl wait --for=condition=Ready pod/emptydir-demo --timeout=120s
+pod/emptydir-demo condition met
+
+$ kubectl exec emptydir-demo -- sh -c 'echo "written at $(date)" > /data/notes.txt; cat /data/notes.txt'
+written at Wed Oct  7 13:46:36 UTC 2026
+
+$ kubectl describe pod emptydir-demo | grep -A 3 'Volumes:'
+Volumes:
+  app-storage:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     
+
+# the volume is backed by the node, not by any storage object:
+$ kubectl get pod emptydir-demo -o jsonpath='volume type: {.spec.volumes[0]}{"\n"}'
+volume type: {"emptyDir":{},"name":"app-storage"}
+
+$ kubectl delete -f session-13-storage-hpa-probes/01-volumes/emptydir-pod.yaml
+pod "emptydir-demo" deleted from default namespace
+
+# deleting the pod destroys the emptyDir and everything in it.
+# 
+# ===== hostPath: a directory on the NODE's filesystem =====
+$ kubectl apply -f session-13-storage-hpa-probes/01-volumes/hostpath-pod.yaml
+pod/hostpath-demo created
+
+$ kubectl wait --for=condition=Ready pod/hostpath-demo --timeout=120s
+pod/hostpath-demo condition met
+
+$ kubectl get pod hostpath-demo -o custom-columns='POD:.metadata.name,NODE:.spec.nodeName' --no-headers
+hostpath-demo   minikube-m02
+
+$ kubectl exec hostpath-demo -- sh -c 'echo "hostPath survives the pod" > /data/persist.txt; cat /data/persist.txt'
+hostPath survives the pod
+
+# the file now exists on the NODE itself, outside any container:
+$ minikube ssh -n minikube-m02 -- 'cat /tmp/hostpath-data/persist.txt' 2>/dev/null
+hostPath survives the pod
+
+# delete the pod and recreate it - the data is still on that node's disk:
+$ kubectl delete -f session-13-storage-hpa-probes/01-volumes/hostpath-pod.yaml
+pod "hostpath-demo" deleted from default namespace
+
+$ kubectl apply -f session-13-storage-hpa-probes/01-volumes/hostpath-pod.yaml
+pod/hostpath-demo created
+
+$ kubectl wait --for=condition=Ready pod/hostpath-demo --timeout=120s
+pod/hostpath-demo condition met
+
+$ kubectl get pod hostpath-demo -o custom-columns='POD:.metadata.name,NODE:.spec.nodeName' --no-headers
+hostpath-demo   minikube-m02
+
+$ kubectl exec hostpath-demo -- cat /data/persist.txt
+hostPath survives the pod
+
+$ kubectl delete -f session-13-storage-hpa-probes/01-volumes/hostpath-pod.yaml --wait=false
+pod "hostpath-demo" deleted from default namespace
+

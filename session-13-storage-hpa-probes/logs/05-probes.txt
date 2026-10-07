@@ -1,0 +1,86 @@
+# Three probes, three different jobs.
+# 
+# ===== readiness: should this pod receive TRAFFIC? =====
+$ kubectl apply -f session-13-storage-hpa-probes/05-probes/readiness.yaml
+pod/readiness-demo created
+
+$ kubectl wait --for=condition=Ready pod/readiness-demo --timeout=120s
+pod/readiness-demo condition met
+
+$ kubectl get pod readiness-demo
+NAME             READY   STATUS    RESTARTS   AGE
+readiness-demo   1/1     Running   0          5s
+
+$ kubectl describe pod readiness-demo | grep -E 'Readiness:'
+    Readiness:      http-get http://:80/ delay=5s timeout=1s period=5s successThreshold=1 failureThreshold=3
+
+# a failing readiness probe removes the pod from Service endpoints but does NOT restart it.
+# 
+# ===== liveness: is this pod ALIVE, or should it be restarted? =====
+$ kubectl apply -f session-13-storage-hpa-probes/05-probes/liveness.yaml
+pod/liveness-demo created
+
+$ kubectl wait --for=condition=Ready pod/liveness-demo --timeout=120s
+pod/liveness-demo condition met
+
+$ kubectl describe pod liveness-demo | grep -E 'Liveness:'
+    Liveness:       http-get http://:80/ delay=5s timeout=2s period=5s successThreshold=1 failureThreshold=3
+
+# 
+# ===== startup: protects a slow boot from the liveness probe =====
+$ kubectl apply -f session-13-storage-hpa-probes/05-probes/startup.yaml
+pod/startup-demo created
+
+$ kubectl wait --for=condition=Ready pod/startup-demo --timeout=120s
+pod/startup-demo condition met
+
+$ kubectl describe pod startup-demo | grep -E 'Startup:|Liveness:|Readiness:'
+    Liveness:       http-get http://:80/ delay=0s timeout=1s period=5s successThreshold=1 failureThreshold=3
+    Readiness:      http-get http://:80/ delay=0s timeout=1s period=5s successThreshold=1 failureThreshold=3
+    Startup:        http-get http://:80/ delay=0s timeout=1s period=2s successThreshold=1 failureThreshold=30
+
+# failureThreshold 30 x periodSeconds 2 = up to 60s of boot time before liveness engages.
+$ kubectl get pods readiness-demo liveness-demo startup-demo
+NAME             READY   STATUS    RESTARTS   AGE
+readiness-demo   1/1     Running   0          8s
+liveness-demo    1/1     Running   0          3s
+startup-demo     1/1     Running   0          2s
+
+# 
+# ===== PROVING what readiness actually controls: Service endpoints =====
+$ kubectl apply -f session-13-storage-hpa-probes/05-probes/readiness-service.yaml
+service/readiness-demo-svc created
+
+$ kubectl get endpointslice -l kubernetes.io/service-name=readiness-demo-svc -o custom-columns='SLICE:.metadata.name,ENDPOINTS:.endpoints[*].addresses,READY:.endpoints[*].conditions.ready'
+SLICE                      ENDPOINTS      READY
+readiness-demo-svc-7glzw   [10.244.1.9]   true
+
+# now BREAK the probe from inside the container (nginx will 403 on /):
+$ kubectl exec readiness-demo -- rm /usr/share/nginx/html/index.html
+
+$ kubectl get pod readiness-demo
+NAME             READY   STATUS    RESTARTS   AGE
+readiness-demo   0/1     Running   0          53s
+
+$ kubectl get endpointslice -l kubernetes.io/service-name=readiness-demo-svc -o custom-columns='SLICE:.metadata.name,ENDPOINTS:.endpoints[*].addresses,READY:.endpoints[*].conditions.ready'
+SLICE                      ENDPOINTS      READY
+readiness-demo-svc-7glzw   [10.244.1.9]   false
+
+$ kubectl describe pod readiness-demo | grep -A 2 'Warning.*Unhealthy' | head -3
+  Warning  Unhealthy  3s (x5 over 18s)  kubelet            spec.containers{nginx}: Readiness probe failed: HTTP probe failed with statuscode: 403
+
+# READY went 1/1 -> 0/1 and the endpoint flipped to ready=false, yet RESTARTS is
+# still 0: readiness gates TRAFFIC, it never restarts anything. That is the whole
+# difference between readiness and liveness.
+# 
+# restore the file and the pod rejoins the service by itself:
+$ kubectl exec readiness-demo -- sh -c 'echo "<h1>back</h1>" > /usr/share/nginx/html/index.html'
+
+$ kubectl get pod readiness-demo
+NAME             READY   STATUS    RESTARTS   AGE
+readiness-demo   1/1     Running   0          69s
+
+$ kubectl get endpointslice -l kubernetes.io/service-name=readiness-demo-svc -o custom-columns='ENDPOINTS:.endpoints[*].addresses,READY:.endpoints[*].conditions.ready'
+ENDPOINTS      READY
+[10.244.1.9]   true
+

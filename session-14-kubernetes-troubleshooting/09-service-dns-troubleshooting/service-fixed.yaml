@@ -1,0 +1,15 @@
+# CORRECTED Service.
+# The course's service.yaml selects `app: web-ahsgdf`, which matches no pod, so it
+# is just as broken as broken-service.yaml. The Deployment labels its pods
+# `app: web`, so that is what the selector must be.
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+spec:
+  selector:
+    app: web
+  ports:
+    - port: 80
+      targetPort: 80
+  type: ClusterIP

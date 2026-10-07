@@ -1,0 +1,30 @@
+# FIX: give the container a limit that matches its real working set.
+# The program allocates ~1GB, so 20Mi could never work. Here the allocation is
+# also reduced to a sane 50MB - raising limits without understanding the
+# allocation just delays the same failure.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fail-5-oomkilled-pod
+  labels: { tier: triage-gauntlet, scenario: oomkilled }
+spec:
+  containers:
+    - name: memory-leaker
+      image: python:3.11-alpine
+      env:
+        - name: PYTHONUNBUFFERED    # else print() is buffered and `kubectl logs` is EMPTY
+          value: "1"
+      command:
+        - "python3"
+        - "-c"
+        - |
+          import time
+          print("Allocating a bounded 50MB buffer...")
+          chunks = [b"x" * (10 * 1024 * 1024) for _ in range(5)]
+          print("Allocation complete, staying alive.")
+          time.sleep(3600)
+      resources:
+        requests:
+          memory: "64Mi"
+        limits:
+          memory: "128Mi"

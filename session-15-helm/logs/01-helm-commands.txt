@@ -1,0 +1,72 @@
+$ helm version
+version.BuildInfo{Version:"v4.3.0", GitCommit:"bec5b06ed841fe5269972d864d5177944fd5970f", GitTreeState:"clean", GoVersion:"go1.27.1", KubeClientVersion:"v1.37"}
+
+# 
+# ===== helm repo: where charts come from =====
+$ helm repo add bitnami https://charts.bitnami.com/bitnami 2>&1 | tail -2
+"bitnami" already exists with the same configuration, skipping
+
+$ helm repo list
+NAME   	URL                               
+bitnami	https://charts.bitnami.com/bitnami
+
+$ helm repo update 2>&1 | tail -3
+Hang tight while we grab the latest from your chart repositories...
+...Successfully got an update from the "bitnami" chart repository
+Update Complete. ⎈Happy Helming!⎈
+
+# ===== helm search: find a chart =====
+$ helm search repo bitnami/nginx 2>&1 | head -4
+NAME                            	CHART VERSION	APP VERSION	DESCRIPTION                                       
+bitnami/nginx                   	25.2.1       	1.31.6     	NGINX Open Source is a web server that can be a...
+bitnami/nginx-ingress-controller	12.0.7       	1.13.1     	NGINX Ingress Controller is an Ingress controll...
+bitnami/nginx-intel             	2.1.15       	0.4.9      	DEPRECATED NGINX Open Source for Intel is a lig...
+
+# 
+# ===== helm create: scaffold a brand-new chart =====
+$ (rm -rf /tmp/demo-chart && cd /tmp && helm create demo-chart && find demo-chart -type f | sort)
+Creating demo-chart
+demo-chart/.helmignore
+demo-chart/Chart.yaml
+demo-chart/templates/NOTES.txt
+demo-chart/templates/_helpers.tpl
+demo-chart/templates/deployment.yaml
+demo-chart/templates/hpa.yaml
+demo-chart/templates/httproute.yaml
+demo-chart/templates/ingress.yaml
+demo-chart/templates/service.yaml
+demo-chart/templates/serviceaccount.yaml
+demo-chart/templates/tests/test-connection.yaml
+demo-chart/values.yaml
+
+# ===== helm lint: validate before installing =====
+$ helm lint /tmp/demo-chart
+==> Linting /tmp/demo-chart
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+
+# ===== helm template: render locally, WITHOUT a cluster =====
+# The most useful debugging command in Helm - shows exactly what WOULD be sent.
+$ helm template my-demo /tmp/demo-chart 2>&1 | head -20
+---
+# Source: demo-chart/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: my-demo-demo-chart
+  labels:
+    helm.sh/chart: demo-chart-0.1.0
+    app.kubernetes.io/name: demo-chart
+    app.kubernetes.io/instance: my-demo
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+automountServiceAccountToken: true
+
+---
+# Source: demo-chart/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-demo-demo-chart
+

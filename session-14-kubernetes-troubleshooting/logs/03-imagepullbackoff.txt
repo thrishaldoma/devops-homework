@@ -1,0 +1,56 @@
+# ######## ISSUE: ImagePullBackOff / ErrImagePull ########
+# --- 1. IDENTIFY ---
+$ kubectl apply -f session-14-kubernetes-troubleshooting/07-imagepullbackoff/broken-pod.yaml
+pod/image-demo created
+
+$ kubectl get pod image-demo
+NAME         READY   STATUS         RESTARTS   AGE
+image-demo   0/1     ErrImagePull   0          14s
+
+$ kubectl get pod image-demo
+NAME         READY   STATUS         RESTARTS   AGE
+image-demo   0/1     ErrImagePull   0          36s
+
+# ErrImagePull is the FIRST failure; ImagePullBackOff is the kubelet backing off.
+# --- 2. INVESTIGATE ---
+$ kubectl describe pod image-demo | grep -A 8 'Events:' | tail -5
+  Normal   Pulling    18s (x2 over 36s)  kubelet            spec.containers{app}: Pulling image "nginx:this-image-does-not-exist"
+  Warning  Failed     17s (x2 over 35s)  kubelet            spec.containers{app}: Failed to pull image "nginx:this-image-does-not-exist": rpc error: code = NotFound desc = failed to pull and unpack image "docker.io/library/nginx:this-image-does-not-exist": failed to resolve reference "docker.io/library/nginx:this-image-does-not-exist": docker.io/library/nginx:this-image-does-not-exist: not found
+  Warning  Failed     17s (x2 over 35s)  kubelet            spec.containers{app}: Error: ErrImagePull
+  Normal   BackOff    5s (x2 over 34s)   kubelet            spec.containers{app}: Back-off pulling image "nginx:this-image-does-not-exist"
+  Warning  Failed     5s (x2 over 34s)   kubelet            spec.containers{app}: Error: ImagePullBackOff
+
+# --- 3. ROOT CAUSE ---
+# The registry returned 'not found' for tag 'this-image-does-not-exist'.
+# Note that kubectl logs is USELESS here - no container ever started:
+$ kubectl logs image-demo 2>&1 | head -2
+Error from server (BadRequest): container "app" in pod "image-demo" is waiting to start: image can't be pulled
+
+# This is the key distinction: infrastructure failures show up in describe/events,
+# application failures show up in logs. Always check Events first for a 0/1 pod.
+# --- 4. FIX: correct the tag ---
+$ diff session-14-kubernetes-troubleshooting/07-imagepullbackoff/broken-pod.yaml session-14-kubernetes-troubleshooting/07-imagepullbackoff/fixed-pod.yaml
+10c10
+<       image: nginx:this-image-does-not-exist
+\ No newline at end of file
+---
+>       image: nginx:1.27
+\ No newline at end of file
+
+$ kubectl delete -f session-14-kubernetes-troubleshooting/07-imagepullbackoff/broken-pod.yaml --wait=true
+pod "image-demo" deleted from default namespace
+
+$ kubectl apply -f session-14-kubernetes-troubleshooting/07-imagepullbackoff/fixed-pod.yaml
+pod/image-demo created
+
+# --- 5. VERIFY ---
+$ kubectl wait --for=condition=Ready pod/image-demo --timeout=180s
+pod/image-demo condition met
+
+$ kubectl get pod image-demo
+NAME         READY   STATUS    RESTARTS   AGE
+image-demo   1/1     Running   0          1s
+
+$ kubectl delete -f session-14-kubernetes-troubleshooting/07-imagepullbackoff/fixed-pod.yaml --wait=false
+pod "image-demo" deleted from default namespace
+

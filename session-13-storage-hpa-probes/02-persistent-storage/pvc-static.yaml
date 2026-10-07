@@ -1,0 +1,15 @@
+# CORRECTED claim. An EMPTY storageClassName means "do not use the default
+# StorageClass" -> the control plane looks for an existing, matching PV.
+# OMITTING the field entirely is what causes the default class to be used
+# and a brand-new volume to be provisioned (see pvc.yaml).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: student-pvc-static
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 500Mi

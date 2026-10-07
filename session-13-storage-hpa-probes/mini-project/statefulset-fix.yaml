@@ -1,0 +1,62 @@
+# WORKED FIX for the RWO-shared-by-many-replicas defect found in deployment.yaml.
+#
+# A StatefulSet's volumeClaimTemplates gives EACH replica its own PVC
+# (web-data-web-app-sts-0, web-data-web-app-sts-1, ...), so no volume is ever
+# mounted by two pods and there is no silent cross-node divergence.
+#
+# Use this when each replica owns its data. If replicas must genuinely SHARE
+# one filesystem, you need ReadWriteMany storage (NFS/EFS/CephFS) instead -
+# ReadWriteOnce cannot do it, on any provider.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: web-app-sts
+  namespace: production-webapp
+  labels:
+    app: web-app-sts
+spec:
+  serviceName: web-app-sts
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web-app-sts
+  template:
+    metadata:
+      labels:
+        app: web-app-sts
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          volumeMounts:
+            - name: web-data
+              mountPath: /data
+          startupProbe:
+            httpGet: { path: /, port: 80 }
+            failureThreshold: 30
+            periodSeconds: 2
+          readinessProbe:
+            httpGet: { path: /, port: 80 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /, port: 80 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: web-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 500Mi

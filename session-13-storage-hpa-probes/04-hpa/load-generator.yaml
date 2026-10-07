@@ -1,0 +1,35 @@
+# Load generator for the HPA demo.
+# Each pod runs 20 parallel infinite request loops against hpa-demo-service.
+# 4 replicas x 20 loops = 80 concurrent request streams, which is enough to push
+# the nginx pods past the 50% CPU target (50m of their 100m request).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-generator
+  labels:
+    app: load-generator
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: load-generator
+  template:
+    metadata:
+      labels:
+        app: load-generator
+    spec:
+      containers:
+        - name: loader
+          image: busybox:1.36
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              i=0
+              while [ $i -lt 20 ]; do
+                ( while true; do wget -q -O /dev/null http://hpa-demo-service/ 2>/dev/null; done ) &
+                i=$((i+1))
+              done
+              wait
+          resources:
+            requests:
+              cpu: 50m

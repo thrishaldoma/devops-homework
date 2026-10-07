@@ -1,0 +1,17 @@
+# CORRECTED static PersistentVolume.
+# storageClassName: "" opts this volume OUT of any StorageClass, so it can be
+# bound manually instead of being ignored in favour of dynamic provisioning.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: student-pv-static
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  hostPath:
+    path: /tmp/student-data
+    type: DirectoryOrCreate

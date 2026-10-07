@@ -1,0 +1,192 @@
+# ===== 1. deploy the application (cpu request 100m, limit 200m) =====
+$ kubectl apply -f session-13-storage-hpa-probes/04-hpa/deployment.yaml -f session-13-storage-hpa-probes/04-hpa/service.yaml
+deployment.apps/hpa-demo created
+service/hpa-demo-service created
+
+$ kubectl rollout status deployment/hpa-demo --timeout=180s
+Waiting for deployment "hpa-demo" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "hpa-demo" rollout to finish: 0 of 1 updated replicas are available...
+deployment "hpa-demo" successfully rolled out
+
+$ kubectl get deploy hpa-demo
+NAME       READY   UP-TO-DATE   AVAILABLE   AGE
+hpa-demo   1/1     1            1           1s
+
+# ===== 2. configure the HPA (min 1, max 5, target 50% CPU) =====
+$ cat session-13-storage-hpa-probes/04-hpa/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-demo
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hpa-demo
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
+
+$ kubectl apply -f session-13-storage-hpa-probes/04-hpa/hpa.yaml
+horizontalpodautoscaler.autoscaling/hpa-demo created
+
+# ===== 3. verify the HPA is reading metrics =====
+# (allow ~60-90s after deploy: metrics-server must complete a scrape cycle,
+#  until then TARGETS shows cpu: <unknown>/50%)
+$ kubectl get hpa hpa-demo
+NAME       REFERENCE             TARGETS       MINPODS   MAXPODS   REPLICAS   AGE
+hpa-demo   Deployment/hpa-demo   cpu: 0%/50%   1         5         1          76s
+
+$ kubectl top pods -l app=hpa-demo
+NAME                        CPU(cores)   MEMORY(bytes)   
+hpa-demo-5d6676989b-kl5jf   0m           11Mi            
+
+$ kubectl describe hpa hpa-demo | grep -A 6 'Metrics:'
+Metrics:                                               ( current / target )
+  resource cpu on pods  (as a percentage of request):  0% (0) / 50%
+Min replicas:                                          1
+Max replicas:                                          5
+Deployment pods:                                       1 current / 1 desired
+Conditions:
+  Type            Status  Reason               Message
+
+# 
+# ===== 4. deploy the load generator (80 concurrent request loops) =====
+$ kubectl apply -f session-13-storage-hpa-probes/04-hpa/load-generator.yaml
+deployment.apps/load-generator created
+
+$ kubectl rollout status deployment/load-generator --timeout=240s
+Waiting for deployment "load-generator" rollout to finish: 0 of 4 updated replicas are available...
+Waiting for deployment "load-generator" rollout to finish: 1 of 4 updated replicas are available...
+Waiting for deployment "load-generator" rollout to finish: 2 of 4 updated replicas are available...
+Waiting for deployment "load-generator" rollout to finish: 3 of 4 updated replicas are available...
+deployment "load-generator" successfully rolled out
+
+# 
+# ===== 5-7. observe CPU utilisation and pod scaling =====
+$ while true; do kubectl get hpa hpa-demo; kubectl get pods -l app=hpa-demo; sleep 15; done
+TIME    CPU/TARGET     REPLICAS  READYPODS NOTE
+15s     0%/50%         1         1        
+30s     0%/50%         1         1        
+45s     0%/50%         1         1        
+60s     84%/50%        2         1        
+75s     84%/50%        2         2        
+90s     84%/50%        2         2        
+105s    84%/50%        2         2        
+120s    164%/50%       4         4        
+135s    164%/50%       4         4        
+150s    164%/50%       4         4        
+165s    164%/50%       4         4        
+180s    63%/50%        4         4        
+195s    63%/50%        4         4        
+210s    63%/50%        4         4        
+225s    63%/50%        4         4        
+240s    55%/50%        4         4        
+255s    55%/50%        4         4        
+270s    55%/50%        4         4        
+285s    55%/50%        4         4        
+300s    55%/50%        4         4        
+315s    55%/50%        4         4        
+330s    55%/50%        4         4        
+345s    55%/50%        4         4        
+360s    55%/50%        4         4        
+375s    55%/50%        4         4        
+390s    55%/50%        4         4        
+405s    55%/50%        4         4        
+420s    55%/50%        4         4        
+435s    55%/50%        4         4        
+450s    55%/50%        4         4        
+465s    55%/50%        4         4        
+480s    55%/50%        4         4        
+
+$ kubectl get hpa hpa-demo
+NAME       REFERENCE             TARGETS        MINPODS   MAXPODS   REPLICAS   AGE
+hpa-demo   Deployment/hpa-demo   cpu: 55%/50%   1         5         4          9m48s
+
+$ kubectl get pods -l app=hpa-demo
+NAME                        READY   STATUS    RESTARTS   AGE
+hpa-demo-5d6676989b-258x2   1/1     Running   0          6m33s
+hpa-demo-5d6676989b-jvbxn   1/1     Running   0          6m33s
+hpa-demo-5d6676989b-kl5jf   1/1     Running   0          9m49s
+hpa-demo-5d6676989b-ql2r8   1/1     Running   0          7m33s
+
+$ kubectl top pods -l app=hpa-demo
+NAME                        CPU(cores)   MEMORY(bytes)   
+hpa-demo-5d6676989b-258x2   56m          13Mi            
+hpa-demo-5d6676989b-jvbxn   54m          13Mi            
+hpa-demo-5d6676989b-kl5jf   54m          14Mi            
+hpa-demo-5d6676989b-ql2r8   56m          13Mi            
+
+# It settled at 4 replicas rather than 5. The HPA has a default 10% tolerance:
+# 55/50 = 1.10, exactly at the edge, so no further scale-up is triggered.
+# The scaling formula is: desired = ceil(current x currentMetric / targetMetric)
+$ kubectl describe hpa hpa-demo | grep -A 8 'Events:'
+Events:
+  Type     Reason                        Age                 From                       Message
+  ----     ------                        ----                ----                       -------
+  Warning  FailedGetResourceMetric       9m6s (x5 over 10m)  horizontal-pod-autoscaler  failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+  Warning  FailedComputeMetricsReplicas  9m6s (x5 over 10m)  horizontal-pod-autoscaler  invalid metrics (1 invalid out of 1), first error is: failed to get cpu resource metric value: failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+  Normal   SuccessfulRescale             7m51s               horizontal-pod-autoscaler  New size: 2; reason: cpu resource utilization (percentage of request) above target
+  Normal   SuccessfulRescale             6m51s               horizontal-pod-autoscaler  New size: 4; reason: cpu resource utilization (percentage of request) above target
+
+# 
+# ===== 8. remove the load and watch it scale back down =====
+$ kubectl delete -f session-13-storage-hpa-probes/04-hpa/load-generator.yaml
+deployment.apps "load-generator" deleted from default namespace
+
+TIME    CPU/TARGET     REPLICAS  NOTE
+15s     55%/50%        4        
+30s     55%/50%        4        
+45s     55%/50%        4        
+60s     55%/50%        4        
+75s     55%/50%        4        
+90s     35%/50%        4        
+105s    35%/50%        4        
+120s    35%/50%        4        
+135s    35%/50%        4        
+150s    0%/50%         4        
+165s    0%/50%         4        
+180s    0%/50%         4        
+195s    0%/50%         4        
+210s    0%/50%         4        
+225s    0%/50%         4        
+240s    0%/50%         4        
+255s    0%/50%         4        
+270s    0%/50%         4        
+285s    0%/50%         4        
+300s    0%/50%         4        
+315s    0%/50%         4        
+330s    0%/50%         4        
+345s    0%/50%         4        
+360s    0%/50%         4        
+375s    0%/50%         3        
+390s    0%/50%         3        
+405s    0%/50%         3        
+420s    0%/50%         3        
+435s    0%/50%         1        
+435s    0%/50%         1         <- back to minReplicas
+
+$ kubectl get hpa hpa-demo
+NAME       REFERENCE             TARGETS       MINPODS   MAXPODS   REPLICAS   AGE
+hpa-demo   Deployment/hpa-demo   cpu: 0%/50%   1         5         3          17m
+
+$ kubectl get pods -l app=hpa-demo
+NAME                        READY   STATUS    RESTARTS   AGE
+hpa-demo-5d6676989b-jvbxn   1/1     Running   0          13m
+
+# NOTE THE ASYMMETRY. CPU reached 0% at ~150s, but the replica count did not move
+# until ~375s - a gap of about 5 minutes. That is the default scale-DOWN
+# stabilizationWindowSeconds: 300. Scale-up has no such window and reacted within
+# one 15s sync. Kubernetes deliberately scales out fast and scales in slowly, so a
+# brief dip in traffic does not tear down capacity you are about to need again.
+$ kubectl delete -f session-13-storage-hpa-probes/04-hpa/hpa.yaml -f session-13-storage-hpa-probes/04-hpa/service.yaml -f session-13-storage-hpa-probes/04-hpa/deployment.yaml --wait=false
+horizontalpodautoscaler.autoscaling "hpa-demo" deleted from default namespace
+service "hpa-demo-service" deleted from default namespace
+deployment.apps "hpa-demo" deleted from default namespace
+
