@@ -109,7 +109,7 @@ Being explicit about this, because the two are not the same kind of evidence.
 
 Stated rather than hidden, as in the other sessions in this repository.
 
-1. **The UI is published on `http://localhost:3080`, not `:3000`.** Host ports
+1. **The UI was published on `http://localhost:3080`, not `:3000`.** Host ports
    3000 and 3001 were both already bound by unrelated `node` processes on this
    machine. Nothing inside the stack changed — only the host-side mapping, via
    an override file kept outside the repository:
@@ -282,6 +282,11 @@ cd terraform && terraform init
 ```
 
 ### Tearing down
+
+The stack was torn down once this evidence was captured, so nothing is left
+running: containers, the Postgres volume, the network and both built images
+were all removed. See [`logs/99-session21-teardown.log`](../logs/99-session21-teardown.log)
+in the repository root.
 
 ```bash
 cd session21-python

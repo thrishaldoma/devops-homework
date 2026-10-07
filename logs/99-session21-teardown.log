@@ -1,0 +1,65 @@
+# Teardown at the end of the Session 21 work, on request.
+# 
+# --- state before ---
+$ docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
+NAMES          IMAGE                                 STATUS
+localstack     localstack/localstack:3.8             Up 3 hours (healthy)
+minikube-m02   gcr.io/k8s-minikube/kicbase:v0.0.51   Up 3 hours
+minikube       gcr.io/k8s-minikube/kicbase:v0.0.51   Up 3 hours
+
+$ kubectl get ns --no-headers 2>/dev/null | awk '{print $1, $2}'
+argocd Active
+default Active
+kube-node-lease Active
+kube-public Active
+kube-system Active
+monitoring Active
+session20 Active
+
+# 
+# --- Session 21 Compose stack: containers, volume, network and images ---
+# (already removed with 'docker compose down -v' plus 'docker rmi')
+$ docker ps -a --filter name=session21 --format '{{.Names}}' | wc -l | xargs echo 'session21 containers remaining:'
+session21 containers remaining: 0
+
+$ docker volume ls --filter name=session21 -q | wc -l | xargs echo 'session21 volumes remaining:'
+session21 volumes remaining: 0
+
+$ docker images --format '{{.Repository}}' | grep -c session21 || echo 'session21 images remaining: 0'
+0
+session21 images remaining: 0
+
+# 
+# --- stopping the cluster: 'minikube stop', not 'delete' ---
+# stop halts both node containers but keeps the cluster on disk, so
+# 'minikube start' brings Argo CD, Prometheus/Grafana and session20 back.
+# 'delete' would destroy them.
+$ minikube stop 2>&1 | tail -4
+* Powering off "minikube-m02" via SSH ...
+* Stopping node "minikube"  ...
+* Powering off "minikube" via SSH ...
+* 2 nodes stopped.
+
+# 
+# --- stopping LocalStack (AutoRemove=false, so it is kept for a restart) ---
+$ docker stop localstack
+localstack
+
+# 
+# --- state after ---
+$ docker ps --format 'table {{.Names}}\t{{.Status}}' 
+NAMES     STATUS
+
+$ docker ps -q | wc -l | xargs echo 'running containers:'
+running containers: 0
+
+$ minikube status 2>&1 | head -8 || true
+minikube
+type: Control Plane
+host: Stopped
+kubelet: Stopped
+apiserver: Stopped
+kubeconfig: Stopped
+
+minikube-m02
+

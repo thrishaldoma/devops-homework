@@ -127,10 +127,20 @@ produced the same information in **3,966 bytes** instead of 29 GB, and
 
 ### Cluster state as delivered
 
-The 2-node cluster is left **running** so the work can be re-verified. Addons
-enabled: `ingress`, `metallb`, `metrics-server`.
+Everything is **stopped**. Nothing from this repository is left running:
+`docker ps` reports zero containers, and both minikube nodes are powered off.
+The teardown is captured in [`logs/99-session21-teardown.log`](./logs/99-session21-teardown.log).
 
-**Still deployed from Session 20** (deliberately, so the GitOps demo stays live):
+`minikube stop` was used rather than `minikube delete`, so the cluster and its
+images survive on disk. Restarting brings the Session 20 workloads back exactly
+as they were, because Argo CD reconciles them from this repository:
+
+```bash
+minikube start                    # both nodes; argocd, monitoring, session20 return
+docker start localstack           # Sessions 18-19, listens on :4566
+```
+
+**What comes back on `minikube start`:**
 
 | Namespace | Contents |
 |---|---|
@@ -138,31 +148,29 @@ enabled: `ingress`, `metallb`, `metrics-server`.
 | `monitoring` | Prometheus + Grafana, with the alert rules firing |
 | `session20` | the application Argo CD manages |
 
-> **Argo CD is an active agent.** While it runs, any commit touching
-> `gitops-app/` auto-deploys, and manual changes to that app are reverted within
-> ~20s. The repo-server also has
+> **Argo CD is an active agent once the cluster is up.** Any commit touching
+> `gitops-app/` auto-deploys, and manual changes to that app are reverted
+> within ~20s. The repo-server also has
 > `ARGOCD_REPO_SERVER_ALLOW_OUT_OF_BOUNDS_SYMLINKS=true` set (see Session 20).
 
-A LocalStack container (Sessions 18–19) is also still running on `:4566`.
-
-The **Session 21 Compose stack is also still up** (frontend, backend and
-Postgres), holding host ports `3080`, `8000` and `5432`:
+The cluster was created with `minikube start --nodes=2 --driver=docker` and the
+`ingress`, `metallb` and `metrics-server` addons. If it is ever deleted rather
+than stopped, Session 20's README has the steps to rebuild it, and LocalStack
+was run as:
 
 ```bash
-# tear down the Session 21 stack
-cd session21-python && docker compose down -v
-docker rmi session21-python-backend:latest session21-python-frontend:latest
+docker run -d --name localstack -p 4566:4566 \
+  -e SERVICES=s3,iam,ec2,dynamodb,sts -e DEBUG=0 localstack/localstack:3.8
 ```
 
-```bash
-# tear down just the Session 20 workloads, leaving the cluster
-kubectl delete application -n argocd session20-mini
-kubectl delete namespace argocd monitoring session20
-docker rm -f localstack
+The Session 21 Compose stack was removed completely — containers, the Postgres
+volume, the network and both built images. Rebuild it with
+`cd session21-python && docker compose up --build`.
 
-# or the whole cluster
-minikube stop      # power the nodes off, keep the cluster and its images
-minikube delete    # remove the cluster entirely
+```bash
+# to remove things permanently rather than just stop them
+minikube delete                   # destroys the cluster and its workloads
+docker rm -f localstack
 ```
 
 ## Applications and ports
