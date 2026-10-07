@@ -1,0 +1,83 @@
+# Real GitHub Actions runs on github.com/thrishaldoma/devops-homework
+# 
+# ===== run history: the first CI run FAILED, and that is the point =====
+$ gh run list --limit 6
+completed	success	CD	CD	main	workflow_run	37642850562	1m14s	2026-10-07T15:18:56Z
+completed	success	CI	CI	main	push	37642427639	2m9s	2026-10-07T15:16:37Z
+in_progress		CD	CD	main	workflow_run	37641366643	21m7s	2026-10-07T14:59:59Z
+completed	success	Publish all sessions (01-20 work to date) and fix CI lint failures	CI	main	push	37641213194	1m4s	2026-10-07T14:58:49Z
+completed	skipped	CD	CD	main	workflow_run	37640922980	2s	2026-10-07T14:56:37Z
+completed	failure	Sessions 13-16: Kubernetes storage/HPA/probes, troubleshooting, Helm,…	CI	main	push	37640856575	29s	2026-10-07T14:56:05Z
+
+# 
+# ===== run 1 (FAILED): lint caught real defects in the application =====
+$ gh run view 37640856575 2>&1 | sed -n '1,14p'
+
+X main CI · 37640856575
+Triggered via push about 25 minutes ago
+
+JOBS
+✓ Unit tests in 14s (ID 112859116968)
+X Lint in 7s (ID 112859235020)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-python@v5
+  ✓ Run pip install flake8
+  X flake8
+  - Post Run actions/setup-python@v5
+  ✓ Post Run actions/checkout@v4
+
+$ gh run view 37640856575 --log-failed 2>&1 | grep -E 'E302|W293|E402|exit code' | sed 's/.*Z //' | head -8
+app/calculator.py:3:1: E302 expected 2 blank lines, found 1
+app/calculator.py:26:1: W293 blank line contains whitespace
+app/calculator.py:33:1: W293 blank line contains whitespace
+app/calculator.py:38:1: W293 blank line contains whitespace
+app/calculator.py:40:1: W293 blank line contains whitespace
+tests/test_calculator.py:5:1: E402 module level import not at top of file
+tests/test_calculator.py:6:1: E402 module level import not at top of file
+1     E302 expected 2 blank lines, found 1
+
+# CD was SKIPPED for this commit - the gate worked, a failing CI never deploys.
+# 
+# ===== run 2 (SUCCESS) after fixing the code, not loosening the linter =====
+$ gh run view 37642427639 2>&1 | sed -n '1,12p'
+
+✓ main CI · 37642427639
+Triggered via push about 4 minutes ago
+
+JOBS
+✓ Unit tests in 10s (ID 112864986691)
+✓ Secret scan in 6s (ID 112865081711)
+✓ Build artifact in 5s (ID 112865081874)
+✓ Lint in 10s (ID 112865082230)
+✓ Docker build in 23s (ID 112865216094)
+
+ANNOTATIONS
+
+# 
+# ===== CD, triggered by the successful CI via workflow_run =====
+$ gh run view 37642850562 2>&1 | sed -n '1,11p'
+
+✓ main CD · 37642850562
+Triggered via workflow_run about 2 minutes ago
+
+JOBS
+✓ Package image in 36s (ID 112865608749)
+✓ Deploy to staging in 22s (ID 112866088950)
+✓ Deploy to production in 5s (ID 112866366885)
+
+ANNOTATIONS
+! Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@v5, docker/build-push-action@v6, docker/setup-buildx-action@v3. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+
+# 
+# ===== artifacts published by the pipelines =====
+$ gh api repos/thrishaldoma/devops-homework/actions/artifacts --jq '.artifacts[] | "\(.name)  \(.size_in_bytes) bytes  (run \(.workflow_run.id))"' 2>/dev/null | head -8
+thrishaldoma~devops-homework~IO6L68.dockerbuild  33788 bytes  (run 37642850562)
+thrishaldoma~devops-homework~Y15ATK.dockerbuild  33520 bytes  (run 37642427639)
+calculator-build  1005 bytes  (run 37642427639)
+container-image  47155180 bytes  (run 37642850562)
+thrishaldoma~devops-homework~SGLKAG.dockerbuild  33492 bytes  (run 37641366643)
+container-image  47155696 bytes  (run 37641366643)
+thrishaldoma~devops-homework~RPVZ40.dockerbuild  40998 bytes  (run 37641213194)
+test-results  381 bytes  (run 37642427639)
+
