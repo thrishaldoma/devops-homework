@@ -1,0 +1,25 @@
+# Applied by an administrator, deliberately OUTSIDE the path ArgoCD watches -
+# otherwise the Application would manage itself and a bad sync could orphan it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: session20-mini
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/thrishaldoma/devops-homework.git
+    targetRevision: main
+    path: session20-monitoring-observability-gitops/gitops-app
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: session20
+
+  syncPolicy:
+    automated:
+      prune: true      # delete cluster resources removed from Git
+      selfHeal: true   # revert manual changes made against the cluster
+    syncOptions:
+      - CreateNamespace=true
