@@ -9,7 +9,14 @@ Every scanner below produced **real findings** — locally and in CI. Transcript
 
 ---
 
-## The pipeline
+## Task — DevSecOps demo project
+
+The assignment asks for one deliverable: a complete CI/CD + DevSecOps pipeline
+covering build, unit test, SAST, SCA, secret scanning, Docker build, container
+image scanning, a security gate, an image push and a Kubernetes deploy. All nine
+stages are implemented and all nine ran green; each is evidenced below.
+
+### The pipeline
 
 ```
 Code ─► Unit Tests ─┬─► SAST (bandit + CodeQL) ─┐
@@ -54,7 +61,7 @@ pod/session17-python-67fbf9d4fd-vb4zr   1/1   Running   10.244.0.6   chart-testi
 
 ---
 
-## The security controls, and what each actually found
+### The security controls, and what each actually found
 
 ### Secret scanning — gitleaks → **4 findings**
 

@@ -98,14 +98,59 @@ minikube addons enable ingress
 # then follow the "Reproducing" section in each session README
 ```
 
-### Cluster state as delivered
+### A second change made outside this folder
 
-Every workload created by these sessions has been deleted — the `default`
-namespace is empty apart from the built-in `kubernetes` Service. The cluster
-itself is left **running** so the work can be re-verified; the `ingress` and
-`metallb` addons remain enabled.
+While producing Session 16, a `docker build --no-cache` was piped through the
+logging helper. BuildKit's default renderer emits continuous progress frames, and
+the capture grew to **29 GB**, filling the data volume. Docker's VM hit `ENOSPC`,
+its ext4 journal aborted, the VM filesystem went read-only, and Docker Desktop
+then refused to start with *"Docker Desktop cannot continue because the disk is
+full."*
+
+With explicit authorisation, the fix was to delete Docker's disk image:
 
 ```bash
+~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw   # was holding 353 GB
+```
+
+Docker Desktop recreated a clean one on next launch and came up in 10 seconds.
+
+**What this cost:** all locally cached Docker images, any stopped containers and
+volumes, and the previous minikube cluster. All were rebuildable and were rebuilt
+(`minikube start --nodes=2`). **What it reclaimed:** 353 GB — free space went from
+100 GB to 453 GB.
+
+**What prevents a repeat:** builds are now captured with `--progress=plain`, which
+produced the same information in **3,966 bytes** instead of 29 GB, and
+`.gitignore` blocks `**/logs/*-local-build.txt` outright.
+
+### Cluster state as delivered
+
+The 2-node cluster is left **running** so the work can be re-verified. Addons
+enabled: `ingress`, `metallb`, `metrics-server`.
+
+**Still deployed from Session 20** (deliberately, so the GitOps demo stays live):
+
+| Namespace | Contents |
+|---|---|
+| `argocd` | Argo CD, syncing `session20-monitoring-observability-gitops/gitops-app` from this repo with `selfHeal: true` and `prune: true` |
+| `monitoring` | Prometheus + Grafana, with the alert rules firing |
+| `session20` | the application Argo CD manages |
+
+> **Argo CD is an active agent.** While it runs, any commit touching
+> `gitops-app/` auto-deploys, and manual changes to that app are reverted within
+> ~20s. The repo-server also has
+> `ARGOCD_REPO_SERVER_ALLOW_OUT_OF_BOUNDS_SYMLINKS=true` set (see Session 20).
+
+A LocalStack container (Sessions 18–19) is also still running on `:4566`.
+
+```bash
+# tear down just the Session 20 workloads, leaving the cluster
+kubectl delete application -n argocd session20-mini
+kubectl delete namespace argocd monitoring session20
+docker rm -f localstack
+
+# or the whole cluster
 minikube stop      # power the nodes off, keep the cluster and its images
 minikube delete    # remove the cluster entirely
 ```

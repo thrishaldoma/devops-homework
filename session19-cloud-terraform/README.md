@@ -13,7 +13,15 @@ Transcripts in [`logs/`](./logs), screenshots in [`screenshots/`](./screenshots)
 
 ---
 
-## Architecture
+## Task — end-to-end cloud infrastructure with Terraform
+
+Build a complete AWS environment with Terraform, demonstrating providers,
+variables, resources, outputs, dependencies, state, and the plan/apply/destroy
+lifecycle. The suggested architecture (VPC → Subnet → Security Group → EC2 → S3)
+is implemented in full as 21 resources, applied, verified independently through
+the AWS CLI, and destroyed.
+
+### Architecture
 
 ```
                          Internet
