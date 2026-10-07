@@ -1,0 +1,85 @@
+# The 9-job DevSecOps pipeline, run for real on GitHub Actions.
+$ gh run view 37644683660 2>&1 | sed -n '1,16p'
+
+✓ main DevSecOps · 37644683660
+Triggered via push about 5 minutes ago
+
+JOBS
+✓ Secret scanning: gitleaks in 7s (ID 112872262419)
+✓ Unit tests in 12s (ID 112872262947)
+✓ SCA: pip-audit in 29s (ID 112872262984)
+✓ SAST: CodeQL in 1m0s (ID 112872263013)
+✓ SAST: bandit in 25s (ID 112872263159)
+✓ Image scan: trivy in 1m46s (ID 112872518993)
+✓ Security gate in 4s (ID 112873397881)
+✓ Push to ghcr.io in 33s (ID 112873456383)
+✓ Deploy to Kubernetes in 1m21s (ID 112873768737)
+
+ANNOTATIONS
+
+# 
+# ===== image scan + security gate =====
+$ gh run view 37644683660 --job 112872518993 --log 2>/dev/null | sed 's/.*Z //' | grep -E '^Total:' | head -2
+Total: 44 (HIGH: 44, CRITICAL: 0)
+
+# 0 CRITICAL, so the gate passed. Policy: block on FIXABLE CRITICALs only.
+# The 44 HIGHs are inherited Debian CVEs that trivy marks fix_deferred - there
+# is nothing to upgrade to. Failing on those would block every build forever
+# and teach the team to bypass the gate, which is worse than no gate.
+$ gh run view 37644683660 --job 112873397881 --log 2>/dev/null | sed 's/.*Z //' | grep -E 'Fixable CRITICAL image|Security gate PASSED' | grep -v echo | head -3
+Fixable CRITICAL image vulnerabilities: 0
+Security gate PASSED
+
+# 
+# ===== SCA: the same scan gave DIFFERENT answers locally and in CI =====
+# locally:
+$ (cd /Users/thrishaldoma/devops-homework/session-17-devsecops/app-src && python3 -m pip_audit -r requirements.txt 2>/dev/null | tail -3)
+Name  Version ID              Fix Versions
+----- ------- --------------- ------------
+click 8.1.8   PYSEC-2026-2132 8.3.3
+
+# in CI:
+$ gh run view 37644683660 --job 112872262984 --log 2>/dev/null | sed 's/.*Z //' | grep -m1 'No known vulnerabilities found'
+No known vulnerabilities found
+
+# Not a flaw in either run. requirements.txt pins only Flask==3.1.3; Flask
+# depends on click>=8.1.3, so the version is resolved at install time. My
+# machine had click 8.1.8 cached (vulnerable, PYSEC-2026-2132); the CI runner
+# resolved click 8.5.0 (patched).
+# LESSON: without a lockfile, an SCA scan describes the machine it ran on, not
+# the application. Two engineers get two answers, and so does prod. The fix is
+# a fully-pinned lockfile (pip-compile / Pipfile.lock / poetry.lock) so the
+# resolved tree is identical everywhere and the scan result is reproducible.
+# 
+# ===== image published to ghcr.io =====
+$ gh run view 37644683660 --job 112873456383 --log 2>/dev/null | sed 's/.*Z //' | grep 'naming to ghcr.io' | head -2
+#12 naming to ghcr.io/thrishaldoma/devsecops-demo:ec2d064abbe43ab6f8d5c167a8d3367625880868 done
+#12 naming to ghcr.io/thrishaldoma/devsecops-demo:latest done
+
+# 
+# ===== and really deployed to a Kubernetes (kind) cluster =====
+$ gh run view 37644683660 --job 112873768737 --log 2>/dev/null | sed 's/.*Z //' | grep -E 'successfully rolled out|session17-python-.*Running|DevSecOps Dashboard|"status":"healthy"' | head -6
+deployment "session17-python" successfully rolled out
+pod/session17-python-67fbf9d4fd-hjtq6   1/1     Running   0          6s    10.244.0.5   chart-testing-control-plane   <none>           <none>
+pod/session17-python-67fbf9d4fd-vb4zr   1/1     Running   0          6s    10.244.0.6   chart-testing-control-plane   <none>           <none>
+{"status":"healthy","timestamp":"2026-10-07T15:36:36.336025Z","uptime_seconds":9.41}
+{"app":"DevSecOps Dashboard","platform":"Linux","python_version":"3.12.15","status":"running","timestamp":"2026-10-07T15:36:36.344352Z","total_requests":3,"uptime":"00h 00m 09s","version":"2.0.0"}
+
+# 
+# ===== the FIRST attempt failed on the secret scan - a real version-skew bug =====
+$ gh run view 37644256881 2>&1 | sed -n '4,10p'
+
+JOBS
+X Secret scanning: gitleaks in 7s (ID 112870894970)
+  ✓ Set up job
+  ✓ Run actions/checkout@v5
+  X Run gitleaks
+  ✓ Post Run actions/checkout@v5
+
+# Root cause: CI downloaded gitleaks 8.21.2 while the config was authored
+# against 8.30.1. The older binary does not understand the [[allowlists]]
+# array syntax, silently IGNORED the allowlist, and failed on the 4 accepted
+# Session 12 findings. Pinning the scanner version fixed it.
+# A scanner that silently ignores its own config is more dangerous than one
+# that errors - here it failed loudly, but the same skew could just as easily
+# have disabled a rule and let a real secret through.

@@ -37,6 +37,7 @@ neither systemd nor those utilities. The image definition is in
 | 14 | Troubleshooting | [`session-14-kubernetes-troubleshooting/`](./session-14-kubernetes-troubleshooting) | 8 triage commands · 5-scenario gauntlet · service/DNS debugging |
 | 15 | Helm | [`session-15-helm/`](./session-15-helm) | chart authoring · install/upgrade/rollback · one chart, two environments |
 | 16 | CI/CD & GitHub Actions | [`session-16-github-actions/`](./session-16-github-actions) | CI pipeline · CD pipeline · Docker build · artifacts |
+| 17 | DevSecOps | [`session-17-devsecops/`](./session-17-devsecops) | SAST · SCA · secret scanning · image scanning · security gate · ghcr.io · k8s deploy |
 
 ## Kubernetes sessions (09–12)
 
