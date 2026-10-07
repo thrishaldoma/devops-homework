@@ -1,0 +1,8 @@
+# Deliberately naive single-stage build, for size comparison only
+FROM node:24-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]

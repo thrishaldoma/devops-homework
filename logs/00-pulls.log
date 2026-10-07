@@ -1,0 +1,198 @@
+latest: Pulling from library/alpine
+21-jdk-alpine: Pulling from library/eclipse-temurin
+2.4: Pulling from library/httpd
+alpine: Pulling from library/nginx
+21-jre-alpine: Pulling from library/eclipse-temurin
+Digest: sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+Status: Image is up to date for alpine:latest
+docker.io/library/alpine:latest
+OK   alpine:latest (attempt 1)
+22.04: Pulling from library/ubuntu
+24-alpine: Pulling from library/node
+8.0: Pulling from library/mysql
+3.11-slim: Pulling from library/python
+ef400840b5e6: Pulling fs layer
+7bddbfbcf00f: Pulling fs layer
+a907c6aa2e98: Pulling fs layer
+981f95701eab: Pulling fs layer
+20-alpine: Pulling from library/node
+fff91e36faf1: Pulling fs layer
+4f4fb700ef54: Pulling fs layer
+bf7af0229701: Pulling fs layer
+01289bdb7344: Pulling fs layer
+91eac6ee2743: Pulling fs layer
+cea950926c89: Pulling fs layer
+9592924c961c: Pulling fs layer
+badda8760139: Pulling fs layer
+d6c1262595ab: Pulling fs layer
+853498d24c3c: Pulling fs layer
+1791812138bb: Pulling fs layer
+accee44535cd: Pulling fs layer
+2123acec2175: Pulling fs layer
+7d0619701995: Pulling fs layer
+14b345211937: Pulling fs layer
+ff8d347ee066: Pulling fs layer
+8e362c2af781: Pulling fs layer
+231032373bb3: Pulling fs layer
+6f93fb0c7078: Pulling fs layer
+67e49a3832eb: Pulling fs layer
+b3054c2391f3: Pulling fs layer
+4fcb28d1dfcf: Pulling fs layer
+fa30ab141b5a: Pulling fs layer
+1959e4a06a1c: Pulling fs layer
+42505e6e6b91: Pulling fs layer
+11c0b299cb47: Pulling fs layer
+7b9f24d93d52: Pulling fs layer
+605b7f42ac6e: Pulling fs layer
+7ce425b17caf: Pulling fs layer
+e9b2852d2a9d: Pulling fs layer
+70a53223cb4c: Pulling fs layer
+ad770837e789: Pulling fs layer
+bf7af0229701: Pulling fs layer
+3ff159de35c2: Pulling fs layer
+0fb0508c44a5: Pulling fs layer
+d79bc110ec9c: Pulling fs layer
+ef400840b5e6: Download complete
+981f95701eab: Download complete
+4f4fb700ef54: Download complete
+01289bdb7344: Download complete
+a907c6aa2e98: Download complete
+cea950926c89: Download complete
+a907c6aa2e98: Pull complete
+fff91e36faf1: Download complete
+bf7af0229701: Download complete
+bf7af0229701: Download complete
+9592924c961c: Download complete
+bf7af0229701: Pull complete
+4f4fb700ef54: Pull complete
+01289bdb7344: Pull complete
+cea950926c89: Pull complete
+d6c1262595ab: Download complete
+91eac6ee2743: Download complete
+fff91e36faf1: Pull complete
+91eac6ee2743: Pull complete
+accee44535cd: Download complete
+1791812138bb: Download complete
+853498d24c3c: Download complete
+2123acec2175: Download complete
+9592924c961c: Pull complete
+d6c1262595ab: Pull complete
+accee44535cd: Pull complete
+1791812138bb: Pull complete
+853498d24c3c: Pull complete
+2123acec2175: Pull complete
+badda8760139: Download complete
+badda8760139: Pull complete
+8e362c2af781: Download complete
+14b345211937: Download complete
+ff8d347ee066: Download complete
+7bddbfbcf00f: Download complete
+ef400840b5e6: Pull complete
+981f95701eab: Pull complete
+7bddbfbcf00f: Pull complete
+8e362c2af781: Pull complete
+231032373bb3: Download complete
+231032373bb3: Pull complete
+6f93fb0c7078: Download complete
+67e49a3832eb: Download complete
+7d0619701995: Download complete
+14b345211937: Pull complete
+ff8d347ee066: Pull complete
+7d0619701995: Pull complete
+1959e4a06a1c: Download complete
+7ce425b17caf: Download complete
+11c0b299cb47: Download complete
+42505e6e6b91: Download complete
+7b9f24d93d52: Download complete
+b3054c2391f3: Download complete
+70a53223cb4c: Download complete
+6f93fb0c7078: Pull complete
+67e49a3832eb: Pull complete
+b3054c2391f3: Pull complete
+e9b2852d2a9d: Download complete
+4fcb28d1dfcf: Download complete
+605b7f42ac6e: Download complete
+ad770837e789: Download complete
+3ff159de35c2: Download complete
+7b9f24d93d52: Pull complete
+70a53223cb4c: Pull complete
+ad770837e789: Pull complete
+7ce425b17caf: Pull complete
+11c0b299cb47: Pull complete
+e9b2852d2a9d: Pull complete
+1959e4a06a1c: Pull complete
+605b7f42ac6e: Pull complete
+d79bc110ec9c: Download complete
+d79bc110ec9c: Pull complete
+0fb0508c44a5: Download complete
+3ff159de35c2: Pull complete
+0fb0508c44a5: Pull complete
+82056d6bbbcf: Download complete
+522ca9254b53: Download complete
+Digest: sha256:6ea5548706b60ac0a602eaf48af74792cbab012d90e811ca8db6184b16b5c3d6
+Status: Downloaded newer image for eclipse-temurin:21-jdk-alpine
+docker.io/library/eclipse-temurin:21-jdk-alpine
+OK   eclipse-temurin:21-jdk-alpine (attempt 1)
+cd322d0ddd02: Pulling fs layer
+bda5d7ef971f: Pulling fs layer
+13e45b12880f: Pulling fs layer
+d17f077ada11: Pulling fs layer
+d461d957ad8a: Download complete
+fa30ab141b5a: Download complete
+e78b009430d6: Download complete
+Digest: sha256:979c38c2228d28c2edfd45c6e27dcee1c7b4a101a5526721ae8ece454e89e99e
+Status: Downloaded newer image for httpd:2.4
+docker.io/library/httpd:2.4
+OK   httpd:2.4 (attempt 1)
+a855f9d558c0: Download complete
+c4f99b055a72: Download complete
+Digest: sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3
+Status: Downloaded newer image for nginx:alpine
+docker.io/library/nginx:alpine
+OK   nginx:alpine (attempt 1)
+42505e6e6b91: Pull complete
+4fcb28d1dfcf: Pull complete
+fa30ab141b5a: Pull complete
+efee3966da57: Download complete
+b1da0de4a5fe: Download complete
+Digest: sha256:974b08960c5d96694c780e65b2d5705268ab1e1ca1a0dd0caf4ba6c3fe34d699
+Status: Downloaded newer image for eclipse-temurin:21-jre-alpine
+docker.io/library/eclipse-temurin:21-jre-alpine
+OK   eclipse-temurin:21-jre-alpine (attempt 1)
+fd16aa656128: Download complete
+Digest: sha256:2edbbc5dc405e9612ba3584ce95480277e3eb374407b5505fe26f17df77c7dbc
+Status: Downloaded newer image for ubuntu:22.04
+docker.io/library/ubuntu:22.04
+OK   ubuntu:22.04 (attempt 1)
+eacb1b710408: Download complete
+1d908647f213: Download complete
+Digest: sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
+Status: Downloaded newer image for node:24-alpine
+docker.io/library/node:24-alpine
+OK   node:24-alpine (attempt 1)
+7a0e30178db8: Download complete
+cf04bc164416: Download complete
+c28e3474ddcf: Download complete
+Digest: sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41d6bab25604534
+Status: Downloaded newer image for python:3.11-slim
+docker.io/library/python:3.11-slim
+OK   python:3.11-slim (attempt 1)
+d17f077ada11: Download complete
+13e45b12880f: Download complete
+cd322d0ddd02: Download complete
+578f543767f0: Download complete
+Digest: sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b
+Status: Downloaded newer image for mysql:8.0
+docker.io/library/mysql:8.0
+OK   mysql:8.0 (attempt 1)
+d17f077ada11: Pull complete
+e68c4317c820: Download complete
+85e939e07fce: Download complete
+bda5d7ef971f: Download complete
+13e45b12880f: Pull complete
+cd322d0ddd02: Pull complete
+bda5d7ef971f: Pull complete
+Digest: sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293
+Status: Downloaded newer image for node:20-alpine
+docker.io/library/node:20-alpine
+OK   node:20-alpine (attempt 1)

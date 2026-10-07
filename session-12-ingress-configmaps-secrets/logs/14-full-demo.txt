@@ -1,0 +1,95 @@
+# ===== run-demo.sh: deploy the whole stack in dependency order =====
+$ bash session-12-ingress-configmaps-secrets/04-full-demo/run-demo.sh
+==> 1/5 ConfigMap
+configmap/yatri-app-config unchanged
+==> 2/5 Secret
+secret/yatri-db-secret unchanged
+==> 3/5 Backend (source ConfigMap + Deployment + Service)
+configmap/yatri-backend-src created
+deployment.apps/yatri-backend created
+service/yatri-backend-service created
+==> 4/5 Frontend (Deployment + Service)
+deployment.apps/yatri-frontend created
+service/yatri-frontend-service created
+==> 5/5 Ingress
+ingress.networking.k8s.io/yatri-ingress created
+==> waiting for rollouts
+Waiting for deployment "yatri-backend" rollout to finish: 0 of 2 updated replicas are available...
+Waiting for deployment "yatri-backend" rollout to finish: 1 of 2 updated replicas are available...
+deployment "yatri-backend" successfully rolled out
+deployment "yatri-frontend" successfully rolled out
+==> stack is up
+NAME                          DATA   AGE
+configmap/yatri-app-config    5      82s
+configmap/yatri-backend-src   1      15s
+
+NAME                     TYPE     DATA   AGE
+secret/yatri-db-secret   Opaque   2      82s
+
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/yatri-backend    2/2     2            2           15s
+deployment.apps/yatri-frontend   2/2     2            2           15s
+
+NAME                             TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
+service/yatri-backend-service    ClusterIP   10.110.227.37    <none>        8080/TCP   15s
+service/yatri-frontend-service   ClusterIP   10.106.254.183   <none>        80/TCP     15s
+
+NAME                                      CLASS   HOSTS         ADDRESS        PORTS   AGE
+ingress.networking.k8s.io/yatri-ingress   nginx   yatri.local   192.168.49.2   80      15s
+
+# 
+# ===== audit the whole stack with one label selector =====
+$ kubectl get configmap,secret,ingress,deploy,svc -l app=yatri-app
+NAME                          DATA   AGE
+configmap/yatri-app-config    5      5m39s
+configmap/yatri-backend-src   1      4m32s
+
+NAME                     TYPE                DATA   AGE
+secret/campus-tls-cert   kubernetes.io/tls   2      107s
+secret/yatri-db-secret   Opaque              2      5m39s
+
+NAME                                           CLASS   HOSTS                                  ADDRESS        PORTS     AGE
+ingress.networking.k8s.io/campus-ingress-tls   nginx   portal.campus.local,api.campus.local   192.168.49.2   80, 443   107s
+ingress.networking.k8s.io/yatri-ingress        nginx   yatri.local                            192.168.49.2   80        4m32s
+
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/yatri-backend    2/2     2            2           4m32s
+deployment.apps/yatri-frontend   2/2     2            2           4m32s
+
+NAME                             TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
+service/yatri-backend-service    ClusterIP   10.110.227.37    <none>        8080/TCP   4m32s
+service/yatri-frontend-service   ClusterIP   10.106.254.183   <none>        80/TCP     4m32s
+
+# 
+# ===== cleanup.sh: tear it all down =====
+$ bash session-12-ingress-configmaps-secrets/04-full-demo/cleanup.sh
+==> deleting ingress.yaml
+ingress.networking.k8s.io "yatri-ingress" deleted from default namespace
+==> deleting frontend.yaml
+deployment.apps "yatri-frontend" deleted from default namespace
+service "yatri-frontend-service" deleted from default namespace
+==> deleting backend.yaml
+configmap "yatri-backend-src" deleted from default namespace
+deployment.apps "yatri-backend" deleted from default namespace
+service "yatri-backend-service" deleted from default namespace
+==> deleting secret.yaml
+secret "yatri-db-secret" deleted from default namespace
+==> deleting configmap.yaml
+configmap "yatri-app-config" deleted from default namespace
+==> remaining app resources (expect none):
+NAME                     TYPE                DATA   AGE
+secret/campus-tls-cert   kubernetes.io/tls   2      107s
+
+NAME                                           CLASS   HOSTS                                  ADDRESS        PORTS     AGE
+ingress.networking.k8s.io/campus-ingress-tls   nginx   portal.campus.local,api.campus.local   192.168.49.2   80, 443   107s
+
+$ kubectl delete ingress campus-ingress-tls --ignore-not-found
+ingress.networking.k8s.io "campus-ingress-tls" deleted from default namespace
+
+$ kubectl delete secret campus-tls-cert --ignore-not-found
+secret "campus-tls-cert" deleted from default namespace
+
+# confirm a clean namespace:
+$ kubectl get deploy,svc,ingress -l app=yatri-app 2>&1 || true
+No resources found in default namespace.
+

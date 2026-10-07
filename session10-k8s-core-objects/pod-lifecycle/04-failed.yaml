@@ -1,0 +1,11 @@
+# Phase: Failed - container exits non-zero with restartPolicy: Never.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lifecycle-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: worker
+      image: busybox:1.36
+      command: ["/bin/sh", "-c", "echo 'fatal error'; exit 1"]

@@ -1,0 +1,59 @@
+==============================================
+        SYSTEM INFORMATION SCRIPT
+==============================================
+
+
+----------------------------------------------
+ SUBMITTED BY
+----------------------------------------------
+Name          : THRISHAL DOMA
+Enrollment No : 24BCS10097
+
+----------------------------------------------
+ SYSTEM DETAILS
+----------------------------------------------
+Current Date  : Friday, 04 September 2026 - 22:07:04
+Hostname      : THRISHALs-MacBook-Pro.local
+Username      : thrishaldoma
+Kernel        : 25.6.0
+
+----------------------------------------------
+ DISK USAGE (df -h)
+----------------------------------------------
+Filesystem        Size    Used   Avail Capacity iused ifree %iused  Mounted on
+/dev/disk3s1s1   926Gi    12Gi   789Gi     2%    459k  4.3G    0%   /
+devfs            203Ki   203Ki     0Bi   100%     702     0  100%   /dev
+/dev/disk3s6     926Gi   4.0Gi   789Gi     1%       4  8.3G    0%   /System/Volumes/VM
+/dev/disk3s2     926Gi   8.5Gi   789Gi     2%    1.5k  8.3G    0%   /System/Volumes/Preboot
+/dev/disk3s4     926Gi   2.7Mi   789Gi     1%      62  8.3G    0%   /System/Volumes/Update
+/dev/disk1s2     550Mi   6.0Mi   531Mi     2%       1  5.4M    0%   /System/Volumes/xarts
+/dev/disk1s1     550Mi   5.9Mi   531Mi     2%      31  5.4M    0%   /System/Volumes/iSCPreboot
+/dev/disk1s3     550Mi   2.3Mi   531Mi     1%     106  5.4M    0%   /System/Volumes/Hardware
+/dev/disk3s5     926Gi   111Gi   789Gi    13%    1.1M  8.3G    0%   /System/Volumes/Data
+map auto_home      0Bi     0Bi     0Bi   100%       0     0     -   /System/Volumes/Data/home
+
+----------------------------------------------
+ RUNNING PROCESSES (first 10)
+----------------------------------------------
+USER               PID  %CPU %MEM      VSZ    RSS   TT  STAT STARTED      TIME COMMAND
+root             68409  34.1  0.1 435399408  36912   ??  Ss    7:54PM   0:00.59 /System/Library/PrivateFrameworks/XprotectFramework.framework/Versions/A/XPCServices/XprotectService.xpc/Contents/MacOS/XprotectService
+_windowserver      592  29.5  0.4 436556448 107936   ??  Ss   27Aug26 490:58.07 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+thrishaldoma     70008  18.0  5.7 1951623216 1440368   ??  S     9:35PM   4:38.86 /Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/152.0.7977.65/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer) --type=renderer --metrics-client-id=3b7a193c-3d08-4ad2-9f69-49cccd9bed59 --lang=en-GB --num-raster-threads=4 --enable-zero-copy --enable-gpu-memory-buffer-compositor-resources --enable-main-frame-before-activation --renderer-client-id=5148 --launch-time-ticks=365118534331 --shared-files --metrics-shmem-handle=1752395122,r,18224452383057749524,11015652841484843531,2097152 --field-trial-handle=1718379636,r,6756043631120093200,3049867244132951413,262144 --variations-seed-version=20260902-010033.819000-production --pseudonymization-salt-handle=1935764596,r,1041733983639088124,7292421914758308605,4 --trace-process-track-uuid=3190713810203310146 --seatbelt-client=300
+thrishaldoma     96298   9.1  1.0 487334272 245776   ??  S    Wed05PM  62:45.74 /Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/152.0.7977.65/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper --type=gpu-process --metrics-client-id=3b7a193c-3d08-4ad2-9f69-49cccd9bed59 --gpu-preferences=WAAAAAAAAAAgAQAEAAAAAAAAAAAAAGAAQAAAAAAAAAADAAAAAAAAADgAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAKAAAAAAAAAAoAAAAAAAAAAgAAAAAAAAADAAAAAEAAAAAAAAAAAAAAAgAAAAAAAAACAAAAAAAAAA= --shared-files --metrics-shmem-handle=1752395122,r,7483383101650897842,3572745545404517812,262144 --field-trial-handle=1718379636,r,6756043631120093200,3049867244132951413,262144 --variations-seed-version=20260902-010033.819000-production --pseudonymization-salt-handle=1935764596,r,1041733983639088124,7292421914758308605,4 --trace-process-track-uuid=3190708988185955192 --seatbelt-client=20
+thrishaldoma      7594   6.0  0.6 436209680 141520   ??  S    Wed09PM   1:09.63 /System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal
+thrishaldoma     96290   4.6  2.4 537504224 593760   ??  S    Wed05PM  49:23.83 /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+thrishaldoma     70967   4.3  2.2 440935776 549712 s000  S+    9:55PM   0:36.51 claude
+_trustd            601   3.6  0.0 435410672  12272   ??  Ss   27Aug26   1:49.52 /usr/libexec/trustd
+_coreaudiod        607   3.3  0.1 435317984  26880   ??  Ss   27Aug26 106:30.68 /usr/sbin/coreaudiod
+root               644   3.1  0.1 435491328  32464   ??  Ss   27Aug26   2:03.07 /usr/libexec/syspolicyd
+
+[+] Directory created : macos-report
+[+] File created      : macos-report/process.log
+
+[+] Running processes saved to  : macos-report/process.log
+[+] Disk usage saved to         : macos-report/disk-usage.log
+[+] Lines written to process.log:      564
+
+==============================================
+ Script completed successfully.
+==============================================

@@ -1,0 +1,12 @@
+# No selector -> Kubernetes will NOT manage the endpoints for this service.
+# You supply them yourself, which is how you front external/legacy infra
+# with a normal in-cluster service name.
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-legacy-db
+spec:
+  ports:
+    - protocol: TCP
+      port: 3306
+      targetPort: 3306

@@ -1,0 +1,35 @@
+$ kubectl apply -f session-11-kubernetes-services/07-no-selector/service.yaml
+service/external-legacy-db created
+
+# no selector -> Kubernetes creates NO endpoints for it:
+$ kubectl get svc external-legacy-db
+NAME                 TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
+external-legacy-db   ClusterIP   10.101.0.116   <none>        3306/TCP   0s
+
+$ kubectl get endpointslice -l kubernetes.io/service-name=external-legacy-db 2>&1 | head -3
+No resources found in default namespace.
+
+# now attach endpoints manually, pointing at an external (non-cluster) IP:
+$ kubectl apply -f session-11-kubernetes-services/07-no-selector/endpoints.yaml
+endpointslice.discovery.k8s.io/external-legacy-db-manual created
+
+$ kubectl get endpointslice -l kubernetes.io/service-name=external-legacy-db -o custom-columns='SLICE:.metadata.name,ADDRESSES:.endpoints[*].addresses,PORT:.ports[*].port'
+SLICE                       ADDRESSES         PORT
+external-legacy-db-manual   [192.168.1.150]   3306
+
+# the service name resolves to its ClusterIP, which now forwards to 192.168.1.150:3306
+$ kubectl exec curl-client -- nslookup external-legacy-db.default.svc.cluster.local 2>&1 | grep -A 3 'Name:'
+Name:	external-legacy-db.default.svc.cluster.local
+Address: 10.101.0.116
+
+
+$ kubectl get svc external-legacy-db -o jsonpath='Service ClusterIP: {.spec.clusterIP}{"\n"}Has selector    : {.spec.selector}{"\n"}'
+Service ClusterIP: 10.101.0.116
+Has selector    : 
+
+# (192.168.1.150 is an illustrative external host and is not live on this network,
+#  so only the routing configuration is demonstrated, not a completed TCP session.)
+$ kubectl delete -f session-11-kubernetes-services/07-no-selector/endpoints.yaml -f session-11-kubernetes-services/07-no-selector/service.yaml --wait=false
+endpointslice.discovery.k8s.io "external-legacy-db-manual" deleted from default namespace
+service "external-legacy-db" deleted from default namespace
+

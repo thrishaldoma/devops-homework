@@ -1,43 +1,21 @@
-# This repository holds Sessions 13-20 only.
-# Sessions 01-12 (Linux -> Kubernetes Ingress) remain local by choice.
-01-linux/
-02-shell-scripting/
-03-networking/
-04-git-github/
-05-docker-apps/
-06-docker-multistage/
-07-docker-network-volume/
-session9-k8s/
-session10-k8s-core-objects/
-session-11-kubernetes-services/
-session-12-ingress-configmaps-secrets/
-
-# Pre-existing evidence from the Linux->Docker submission
-/logs/
-/screenshots/
-
-# Tooling from the earlier submission (the two K8s helpers below are kept)
-_tools/run.sh
-_tools/verify.sh
-_tools/appendix-c.sh
-_tools/shot-url.sh
-
-# Source documents
-*.docx
-DevOps Assignment Season 2.md
-
-# Build and OS noise
+# OS / editor noise
 .DS_Store
+
+# Python / build output
 __pycache__/
 *.pyc
 build/
+
+# Terraform local state (never commit state or lock files from a laptop run)
 .terraform/
 *.tfstate
 *.tfstate.backup
-.terraform.lock.hcl
+
+# Secret material - a private key must never be committed, even a throwaway one
 tls.key
 tls.crt
+*.pem
 
-# Guard: never commit raw build-progress logs (a --no-cache docker build once
-# wrote a 29GB file through the capture helper).
+# Guard: raw build-progress logs. A `docker build --no-cache` once wrote a 29GB
+# file through the capture helper; never let BuildKit progress reach a log file.
 **/logs/*-local-build.txt

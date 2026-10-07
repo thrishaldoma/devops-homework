@@ -1,0 +1,14 @@
+# LoadBalancer asks the cloud controller for an external IP. It is a superset:
+# it creates a ClusterIP AND a NodePort underneath, then points the external
+# load balancer at that NodePort.
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service-loadbalancer
+spec:
+  type: LoadBalancer
+  selector:
+    app: web-loadbalancer
+  ports:
+    - port: 80
+      targetPort: 80

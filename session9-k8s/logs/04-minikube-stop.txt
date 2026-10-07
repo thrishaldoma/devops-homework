@@ -1,0 +1,21 @@
+$ minikube stop 2>&1 | tr '\r' '\n' | grep -v '^[[:space:]]*$'
+* Stopping node "minikube-m02"  ...
+* Powering off "minikube-m02" via SSH ...
+* Stopping node "minikube"  ...
+* Powering off "minikube" via SSH ...
+* 2 nodes stopped.
+
+$ minikube status
+minikube
+type: Control Plane
+host: Stopped
+kubelet: Stopped
+apiserver: Stopped
+kubeconfig: Stopped
+
+minikube-m02
+type: Worker
+host: Stopped
+kubelet: Stopped
+
+

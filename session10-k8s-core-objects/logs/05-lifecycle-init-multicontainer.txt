@@ -1,0 +1,85 @@
+# ===== 6. Terminal phases: Running / Succeeded / Failed =====
+$ kubectl apply -f session10-k8s-core-objects/pod-lifecycle/01-running.yaml -f session10-k8s-core-objects/pod-lifecycle/03-succeeded.yaml -f session10-k8s-core-objects/pod-lifecycle/04-failed.yaml
+pod/lifecycle-running created
+pod/lifecycle-succeeded created
+pod/lifecycle-failed created
+
+$ kubectl get pods lifecycle-running lifecycle-succeeded lifecycle-failed
+NAME                  READY   STATUS      RESTARTS   AGE
+lifecycle-running     1/1     Running     0          20s
+lifecycle-succeeded   0/1     Completed   0          20s
+lifecycle-failed      0/1     Error       0          20s
+
+$ kubectl get pods lifecycle-running lifecycle-succeeded lifecycle-failed -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,EXIT:.status.containerStatuses[0].state.terminated.exitCode'
+NAME                  PHASE       EXIT
+lifecycle-running     Running     <none>
+lifecycle-succeeded   Succeeded   0
+lifecycle-failed      Failed      1
+
+$ kubectl delete -f session10-k8s-core-objects/pod-lifecycle/01-running.yaml -f session10-k8s-core-objects/pod-lifecycle/03-succeeded.yaml -f session10-k8s-core-objects/pod-lifecycle/04-failed.yaml --wait=false
+pod "lifecycle-running" deleted from default namespace
+pod "lifecycle-succeeded" deleted from default namespace
+pod "lifecycle-failed" deleted from default namespace
+
+# ===== 7. Init container: sequential prerequisite before the app starts =====
+$ kubectl apply -f session10-k8s-core-objects/pod-lifecycle/10-init-container.yaml
+pod/lifecycle-init created
+
+$ while true; do kubectl get pod lifecycle-init --no-headers; sleep 2; done
+lifecycle-init  READY=0/1  Init:0/1
+lifecycle-init  READY=1/1  Running
+
+$ kubectl logs lifecycle-init -c setup
+running migrations / warming cache
+setup complete
+
+$ kubectl describe pod lifecycle-init | grep -A 8 'Init Containers:'
+Init Containers:
+  setup:
+    Container ID:  containerd://de97a1373480a379f9c7644bf1ac56fc45375f9f4b20b8dcab5a48b144dad33b
+    Image:         busybox:1.36
+    Image ID:      docker.io/library/busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      /bin/sh
+
+$ kubectl delete -f session10-k8s-core-objects/pod-lifecycle/10-init-container.yaml --wait=false
+pod "lifecycle-init" deleted from default namespace
+
+# ===== 8. Multi-container pod: app + logging sidecar (READY 2/2) =====
+$ kubectl apply -f session10-k8s-core-objects/pod-lifecycle/11-multi-container.yaml
+pod/lifecycle-multi-container created
+
+$ kubectl wait --for=condition=Ready pod/lifecycle-multi-container --timeout=120s
+pod/lifecycle-multi-container condition met
+
+$ kubectl get pod lifecycle-multi-container
+NAME                        READY   STATUS    RESTARTS   AGE
+lifecycle-multi-container   2/2     Running   0          0s
+
+# the sidecar tails a log file written by the app container through a shared emptyDir volume
+$ kubectl logs lifecycle-multi-container -c sidecar
+06:25:19 app request #1
+06:25:24 app request #2
+06:25:29 app request #3
+06:25:34 app request #4
+
+$ kubectl get pod lifecycle-multi-container -o jsonpath='Containers: {range .spec.containers[*]}{.name} {end}{"\n"}'
+Containers: app sidecar 
+
+$ kubectl delete -f session10-k8s-core-objects/pod-lifecycle/11-multi-container.yaml --wait=false
+pod "lifecycle-multi-container" deleted from default namespace
+
+# ===== 9. Graceful termination: SIGTERM trap + terminationGracePeriodSeconds =====
+$ kubectl apply -f session10-k8s-core-objects/pod-lifecycle/12-termination.yaml
+pod/lifecycle-termination created
+
+$ kubectl wait --for=condition=Ready pod/lifecycle-termination --timeout=120s
+pod/lifecycle-termination condition met
+
+# timing the delete - the trap sleeps 10s before exiting, so deletion is NOT instant
+$ time kubectl delete -f session10-k8s-core-objects/pod-lifecycle/12-termination.yaml
+pod "lifecycle-termination" deleted from default namespace
+  0.02s user 0.02s system 0% cpu 11.453 total
+

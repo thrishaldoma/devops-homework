@@ -1,0 +1,48 @@
+$ kubectl apply -f session-12-ingress-configmaps-secrets/01-configmap/app-config.yaml
+configmap/yatri-app-config created
+
+$ kubectl get configmap yatri-app-config
+NAME               DATA   AGE
+yatri-app-config   5      0s
+
+$ kubectl describe configmap yatri-app-config
+Name:         yatri-app-config
+Namespace:    default
+Labels:       app=yatri-app
+Annotations:  <none>
+
+Data
+====
+DEFAULT_CURRENCY:
+----
+INR
+
+ENVIRONMENT:
+----
+production
+
+LOG_LEVEL:
+----
+INFO
+
+MAX_BOOKING_DAYS:
+----
+90
+
+PORT:
+----
+8080
+
+
+BinaryData
+====
+
+Events:  <none>
+
+# query individual keys with JSONPath:
+$ kubectl get configmap yatri-app-config -o jsonpath='{.data.ENVIRONMENT}' && echo ''
+production
+
+$ kubectl get configmap yatri-app-config -o jsonpath='{.data.LOG_LEVEL}' && echo ''
+INFO
+

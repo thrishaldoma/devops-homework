@@ -1,0 +1,31 @@
+# Drill 1 - same Deployment, but the image tag does not exist.
+# maxUnavailable: 0 means Kubernetes refuses to remove a healthy old pod until
+# the new one is Ready, so the rollout stalls safely instead of taking the app
+# down. This is the deployment strategy protecting you from a bad release.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yatri-backend
+  labels:
+    app: yatri-backend
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: yatri-backend
+  template:
+    metadata:
+      labels:
+        app: yatri-backend
+        version: v2-broken
+    spec:
+      containers:
+        - name: backend
+          image: nginx:v99-does-not-exist    # <-- unresolvable tag
+          ports:
+            - containerPort: 80

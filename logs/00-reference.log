@@ -1,0 +1,27 @@
+
+$ curl -sSL -w 'http_code=%{http_code} bytes=%{size_download}\n' 'https://github.com/Nency-Ravaliya/devops-heros/archive/refs/heads/main.tar.gz' -o repo.tgz
+http_code=200 bytes=11425074
+[exit: 0]
+
+$ tar xzf repo.tgz && ls
+devops-heros-main
+repo.tgz
+[exit: 0]
+
+$ ls '/tmp/devops-ref/devops-heros-main'
+LICENSE
+README.md
+session1-devops-engineer-roadmap
+session10-k8s-core-objects
+session2-linux
+session3-shell-scripting
+session4-networking
+session5-git-github
+session6-7-docker
+session8-docker-networking-volume
+session9-k8s
+[exit: 0]
+
+$ find '/tmp/devops-ref/devops-heros-main' -name '.git' | wc -l
+       0
+[exit: 0]

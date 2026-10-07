@@ -1,0 +1,23 @@
+$ kubectl apply -f session10-k8s-core-objects/hello.yml
+pod/hello-pod created
+
+# polling every 0.3s to catch the transient phases (consecutive duplicates removed)
+$ while true; do kubectl get pod hello-pod --no-headers; sleep 0.3; done
+hello-pod  0/1  ContainerCreating
+hello-pod  1/1  Running
+hello-pod  0/1  Completed
+
+# Stage 3 'Completed' in the STATUS column corresponds to pod phase Succeeded:
+$ kubectl get pod hello-pod -o jsonpath='{.status.phase}{"\n"}'
+Succeeded
+
+$ kubectl get pod hello-pod -o jsonpath='Container exit code: {.status.containerStatuses[0].state.terminated.exitCode}{"\n"}'
+Container exit code: 0
+
+$ kubectl logs hello-pod
+Hello from Kubernetes
+Batch work finished
+
+$ kubectl delete -f session10-k8s-core-objects/hello.yml
+pod "hello-pod" deleted from default namespace
+

@@ -1,0 +1,43 @@
+# Deployment pods carry a random replicaset hash; StatefulSet pods are ordinals.
+$ kubectl get pods -l app=web-clusterip
+NAME                                 READY   STATUS    RESTARTS   AGE
+web-app-clusterip-6ccf84dc4f-mdjp6   1/1     Running   0          4m21s
+web-app-clusterip-6ccf84dc4f-v2qmj   1/1     Running   0          4m21s
+web-app-clusterip-6ccf84dc4f-wwgkk   1/1     Running   0          4m21s
+
+$ kubectl get pods -l app=web-headless
+NAME             READY   STATUS    RESTARTS   AGE
+web-stateful-0   1/1     Running   0          19s
+web-stateful-1   1/1     Running   0          18s
+web-stateful-2   1/1     Running   0          18s
+
+# 
+# ===== delete one pod from EACH controller =====
+# stateless pod being deleted : web-app-clusterip-6ccf84dc4f-mdjp6
+# stateful  pod being deleted : web-stateful-0  (IP 10.244.1.72)
+$ kubectl delete pod web-app-clusterip-6ccf84dc4f-mdjp6 web-stateful-0 --wait=true
+pod "web-app-clusterip-6ccf84dc4f-mdjp6" deleted from default namespace
+pod "web-stateful-0" deleted from default namespace
+
+$ kubectl get pods -l app=web-clusterip
+NAME                                 READY   STATUS    RESTARTS   AGE
+web-app-clusterip-6ccf84dc4f-4h62q   1/1     Running   0          13s
+web-app-clusterip-6ccf84dc4f-v2qmj   1/1     Running   0          4m34s
+web-app-clusterip-6ccf84dc4f-wwgkk   1/1     Running   0          4m34s
+
+$ kubectl get pods -l app=web-headless
+NAME             READY   STATUS    RESTARTS   AGE
+web-stateful-0   1/1     Running   0          12s
+web-stateful-1   1/1     Running   0          31s
+web-stateful-2   1/1     Running   0          31s
+
+# 
+# RESULT
+#   Deployment : web-app-clusterip-6ccf84dc4f-mdjp6 is gone forever; a pod with a NEW random name took its place.
+#   StatefulSet: web-stateful-0 came back with the SAME name (identity is invariant).
+#   Its IP did change (10.244.1.72 -> 10.244.1.74) - which is exactly why you address a
+#   StatefulSet pod by its stable DNS name, never by IP.
+$ kubectl exec headless-dns-client -- curl -s http://web-stateful-0.web-service-headless | grep -o '<title>.*</title>'
+<title>web-stateful-0</title>
+
+# the stable DNS name still resolves to the replacement pod.

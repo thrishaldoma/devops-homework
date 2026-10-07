@@ -1,0 +1,95 @@
+$ kubectl apply -f session10-k8s-core-objects/01-rolling-update/deployment-v1.yaml -f session10-k8s-core-objects/01-rolling-update/service.yaml
+deployment.apps/app-rolling created
+service/app-rolling-service unchanged
+
+$ kubectl rollout status deployment/app-rolling --timeout=180s
+Waiting for deployment "app-rolling" rollout to finish: 0 of 3 updated replicas are available...
+Waiting for deployment "app-rolling" rollout to finish: 1 of 3 updated replicas are available...
+Waiting for deployment "app-rolling" rollout to finish: 2 of 3 updated replicas are available...
+deployment "app-rolling" successfully rolled out
+
+$ kubectl get pods -l app=app-rolling --show-labels
+NAME                          READY   STATUS    RESTARTS   AGE   LABELS
+app-rolling-87c4c56d9-6w9bc   1/1     Running   0          5s    app=app-rolling,pod-template-hash=87c4c56d9,version=v1
+app-rolling-87c4c56d9-7h5sr   1/1     Running   0          5s    app=app-rolling,pod-template-hash=87c4c56d9,version=v1
+app-rolling-87c4c56d9-cv28r   1/1     Running   0          5s    app=app-rolling,pod-template-hash=87c4c56d9,version=v1
+
+# ===== trigger rolling update to v2 (maxSurge=1, maxUnavailable=0) =====
+# sampling every 1s to prove READY never drops below 3 -> zero downtime
+$ kubectl apply -f deployment-v2.yaml    # sampled every 1s during the rollout
+TIME   TOTAL   READY   V1   V2
+1s     4       3       3    1
+2s     4       3       3    1
+3s     4       3       3    1
+4s     4       3       3    1
+5s     5       3       3    2
+6s     4       3       2    2
+7s     4       3       2    2
+8s     4       3       2    2
+9s     4       3       1    3
+10s    4       3       1    3
+11s    4       3       1    3
+12s    3       3       0    3
+
+$ kubectl rollout status deployment/app-rolling --timeout=180s
+deployment "app-rolling" successfully rolled out
+
+$ kubectl get pods -l app=app-rolling --show-labels
+NAME                           READY   STATUS    RESTARTS   AGE   LABELS
+app-rolling-67bcdfbd5c-67nv9   1/1     Running   0          8s    app=app-rolling,pod-template-hash=67bcdfbd5c,version=v2
+app-rolling-67bcdfbd5c-r74pz   1/1     Running   0          12s   app=app-rolling,pod-template-hash=67bcdfbd5c,version=v2
+app-rolling-67bcdfbd5c-sphg2   1/1     Running   0          4s    app=app-rolling,pod-template-hash=67bcdfbd5c,version=v2
+
+# NOTE: TOTAL momentarily reads 5 because 'kubectl get pods' also counts pods in
+# Terminating state. maxSurge=1 caps *non-terminated* pods at 3+1=4.
+# verify the Service now serves v2 (curl from inside the cluster):
+$ kubectl exec curl-client -- curl -s http://app-rolling-service
+<h1>App Rolling</h1><p>VERSION: v2</p>
+
+$ kubectl rollout history deployment/app-rolling
+deployment.apps/app-rolling 
+REVISION  CHANGE-CAUSE
+1         <none>
+2         <none>
+
+
+# ===== rollback to the previous revision =====
+$ kubectl rollout undo deployment/app-rolling
+Warning: resource deployments/app-rolling was previously managed with 'kubectl apply'. Rolling back will not update the kubectl.kubernetes.io/last-applied-configuration annotation, which may cause unexpected behavior on future 'kubectl apply' operations. Consider using 'kubectl apply' with your previous configuration file instead.
+deployment.apps/app-rolling rolled back
+
+$ kubectl rollout status deployment/app-rolling --timeout=180s
+Waiting for deployment "app-rolling" rollout to finish: 1 out of 3 new replicas have been updated...
+Waiting for deployment "app-rolling" rollout to finish: 1 out of 3 new replicas have been updated...
+Waiting for deployment "app-rolling" rollout to finish: 1 out of 3 new replicas have been updated...
+Waiting for deployment "app-rolling" rollout to finish: 2 out of 3 new replicas have been updated...
+Waiting for deployment "app-rolling" rollout to finish: 2 out of 3 new replicas have been updated...
+Waiting for deployment "app-rolling" rollout to finish: 2 out of 3 new replicas have been updated...
+Waiting for deployment "app-rolling" rollout to finish: 2 out of 3 new replicas have been updated...
+Waiting for deployment "app-rolling" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "app-rolling" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "app-rolling" rollout to finish: 1 old replicas are pending termination...
+deployment "app-rolling" successfully rolled out
+
+$ kubectl get pods -l app=app-rolling --show-labels
+NAME                           READY   STATUS        RESTARTS   AGE   LABELS
+app-rolling-67bcdfbd5c-67nv9   1/1     Terminating   0          48s   app=app-rolling,pod-template-hash=67bcdfbd5c,version=v2
+app-rolling-87c4c56d9-52pv6    1/1     Running       0          4s    app=app-rolling,pod-template-hash=87c4c56d9,version=v1
+app-rolling-87c4c56d9-58pbk    1/1     Running       0          8s    app=app-rolling,pod-template-hash=87c4c56d9,version=v1
+app-rolling-87c4c56d9-nt9zl    1/1     Running       0          12s   app=app-rolling,pod-template-hash=87c4c56d9,version=v1
+
+# traffic is back on v1:
+$ kubectl exec curl-client -- curl -s http://app-rolling-service
+<h1>App Rolling</h1><p>VERSION: v1</p>
+
+$ kubectl rollout history deployment/app-rolling
+deployment.apps/app-rolling 
+REVISION  CHANGE-CAUSE
+2         <none>
+3         <none>
+
+
+$ kubectl delete -f session10-k8s-core-objects/01-rolling-update/service.yaml -f session10-k8s-core-objects/01-rolling-update/deployment-v1.yaml --wait=false
+service "app-rolling-service" deleted from default namespace
+deployment.apps "app-rolling" deleted from default namespace
+

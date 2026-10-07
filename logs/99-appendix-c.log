@@ -1,0 +1,132 @@
+=== C.1 CONSTRAINT COMPLIANCE ===
+  PASS  no .git anywhere in deliverable
+  PASS  no .gitignore/.gitattributes
+  PASS  no .github/.gitmodules/LICENSE
+  PASS  /tmp/git-sandbox does not exist
+  PASS  global git config intact (never modified)
+  PASS  only repo-local git config used, never --global
+  PASS  no git push / git remote / gh command in any log
+  PASS  sudo never invoked on the macOS host (package name/group name matches only)
+  PASS  no blanket Docker prune; only named resources
+  NOTE  DEVIATION: Docker Desktop's settings-store.json was modified, which lies
+        outside ~/devops-homework and /tmp. The user explicitly authorised this to
+        repair a Virtualization.framework failure that stopped Docker starting at all.
+        Two keys changed:
+          UseVirtualizationFramework        -> false   (use Docker VMM, not Apple VZ)
+          UseVirtualizationFrameworkRosetta -> false
+        Documented with full evidence as Issue 4 in logs/ISSUES.md.
+        To revert: set UseVirtualizationFramework back to true (or delete both keys)
+        and relaunch Docker Desktop.
+  PASS  no writes outside ~/devops-homework and /tmp, apart from the declared setting above
+=== C.2 PART 01 - LINUX ===
+  PASS  lab-environment/Dockerfile exists and built (linux-lab:v1)
+  PASS  ls -li showing shared inode 66068 and link count 2
+  PASS  post-deletion: hard link readable, soft link fails
+  PASS  ln mydir dirhard refusal
+  PASS  file proves adduser is a script
+  PASS  file proves useradd is an ELF binary
+  PASS  testuser via adduser in /etc/passwd
+  PASS  testuser verified via id
+  PASS  testuser2 contrast: /bin/sh
+  PASS  testuser2 password locked (L)
+  PASS  journalctl induced nginx failure
+  PASS  systemd failure result in journal
+  PASS  recovery confirmed
+  PASS  cheat sheet: text processing group
+  PASS  cheat sheet: process/system group
+  PASS  cheat sheet: archives group
+  PASS  README contains prose interview answer
+=== C.3 PART 02 - SHELL ===
+  PASS  sysinfo.sh executable
+  PASS  #!/bin/bash on line 1
+  PASS  all ten requirements mapped to line numbers
+  PASS  run-output.txt from a real run with real input
+  PASS  system-report/process.log non-empty
+  PASS  system-report/disk-usage.log non-empty
+  PASS  README explains > vs >>
+=== C.4 PART 03 - NETWORKING ===
+  PASS  37 commands with real output (min 15)
+  PASS  explanations reference observed values
+  PASS  IP class table
+  PASS  private ranges table
+  PASS  ipcalc example 1 verified
+  PASS  ipcalc example 3 verified (non-classful /26)
+  PASS  macOS equivalents table
+=== C.5 PART 04 - GIT ===
+  PASS  commit -m refusal with nothing staged
+  PASS  refusal exit code 1
+  PASS  commit -a -m shows 1 file changed
+  PASS  untracked file survives commit -a
+  PASS  deletion case demonstrated
+  PASS  3 commits on main
+  PASS  3 commits on feature
+  PASS  git log used to identify the hash
+  PASS  cherry-pick executed with a NEW hash
+  PASS  post-pick cat proves content landed
+  PASS  post-pick graph captured
+  PASS  transcript.txt in deliverable
+=== C.6 PART 05 - DOCKER APPS ===
+  PASS  nodejs-app exact name + Dockerfile + source
+  PASS  python-app exact name + Dockerfile + source
+  PASS  java-app exact name + Dockerfile + source
+  PASS  Apache-app exact name + Dockerfile + source
+  PASS  React-app exact name + Dockerfile + source
+  PASS  nginx-app exact name + Dockerfile + source
+  PASS  node HTTP check
+  PASS  python HTTP check
+  PASS  java HTTP check
+  PASS  apache HTTP check
+  PASS  nginx HTTP check
+  PASS  react check (rendered DOM - SPA)
+  PASS  six app screenshots present
+  PASS  README explains Python->Flask substitution
+  PASS  no node_modules or dist
+=== C.7 PART 06 - MULTI-STAGE ===
+  PASS  curl :8080 exact required string
+  PASS  0.0.0.0:8080->3000/tcp in captured docker ps
+  PASS  browser screenshot
+  PASS  rendered docker ps screenshot
+  PASS  real multi-stage size recorded
+  PASS  real single-stage size recorded
+  PASS  README has name + enrollment
+  PASS  three+ application types running simultaneously
+=== C.8 PART 07 - NETWORKS & VOLUMES ===
+  PASS  three networks created and listed
+  PASS  backend on two networks via docker inspect
+  PASS  frontend->backend succeeded
+  PASS  backend->database succeeded
+  PASS  frontend->database failed with 'bad address'
+  PASS  connect/disconnect pair: works after connect
+  PASS  Apache with --network host verified
+  PASS  bind mount served 'Hello students'
+  PASS  bind mount updated live
+  PASS  continuous uptime proven (RestartCount=0)
+  PASS  named-volume persistence across recreation
+  PASS  overlay research: VXLAN
+  PASS  overlay research: port table
+  PASS  overlay research: driver comparison
+  PASS  final-state.txt
+  PASS  07-bind-before.png
+  PASS  07-bind-after.png
+=== C.9 FINAL ===
+  PASS  root README with name + enrollment
+  PASS  root README index
+  PASS  root README port table
+  PASS  01-linux/README.md carries name+enrollment
+  PASS  02-shell-scripting/README.md carries name+enrollment
+  PASS  04-git-github/README.md carries name+enrollment
+  PASS  05-docker-apps/README.md carries name+enrollment
+  PASS  06-docker-multistage/README.md carries name+enrollment
+  PASS  07-docker-network-volume/README.md carries name+enrollment
+  PASS  03-networking/README.md carries name+enrollment
+  PASS  logs/01-linux.log transcript
+  PASS  logs/02-shell.log transcript
+  PASS  logs/03-networking.log transcript
+  PASS  logs/04-git.log transcript
+  PASS  logs/05-docker-apps.log transcript
+  PASS  logs/06-multistage.log transcript
+  PASS  logs/07-network-volume.log transcript
+  PASS  logs/ISSUES.md
+
+APPENDIX C RESULT: 111 passed, 0 failed
+APPENDIX C: PASS

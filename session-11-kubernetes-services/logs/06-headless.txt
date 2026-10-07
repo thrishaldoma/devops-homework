@@ -1,0 +1,54 @@
+$ kubectl apply -f session-11-kubernetes-services/05-headless/service.yaml -f session-11-kubernetes-services/05-headless/app-statefulset.yaml -f session-11-kubernetes-services/05-headless/client-pod.yaml
+service/web-service-headless created
+statefulset.apps/web-stateful created
+pod/headless-dns-client created
+
+$ kubectl rollout status statefulset/web-stateful --timeout=300s
+Waiting for 3 pods to be ready...
+Waiting for 2 pods to be ready...
+Waiting for 2 pods to be ready...
+Waiting for 1 pods to be ready...
+Waiting for 1 pods to be ready...
+partitioned roll out complete: 3 new pods have been updated...
+
+$ kubectl wait --for=condition=ready pod/headless-dns-client --timeout=180s
+pod/headless-dns-client condition met
+
+# CLUSTER-IP is explicitly None - there is no virtual IP to load-balance through.
+$ kubectl get svc web-service-headless
+NAME                   TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+web-service-headless   ClusterIP   None         <none>        80/TCP    2s
+
+$ kubectl get pods -l app=web-headless -o wide
+NAME             READY   STATUS    RESTARTS   AGE   IP            NODE           NOMINATED NODE   READINESS GATES
+web-stateful-0   1/1     Running   0          2s    10.244.1.72   minikube-m02   <none>           <none>
+web-stateful-1   1/1     Running   0          1s    10.244.0.29   minikube       <none>           <none>
+web-stateful-2   1/1     Running   0          1s    10.244.1.73   minikube-m02   <none>           <none>
+
+# ===== DNS on a headless service returns ALL pod IPs as separate A records =====
+$ kubectl exec headless-dns-client -- nslookup web-service-headless 2>&1 | grep -A 12 'Name:'
+Name:	web-service-headless.default.svc.cluster.local
+Address: 10.244.0.29
+Name:	web-service-headless.default.svc.cluster.local
+Address: 10.244.1.72
+Name:	web-service-headless.default.svc.cluster.local
+Address: 10.244.1.73
+
+command terminated with exit code 1
+
+# ===== each pod also gets its own stable DNS name: <pod>.<service> =====
+$ kubectl exec headless-dns-client -- nslookup web-stateful-0.web-service-headless.default.svc.cluster.local 2>&1 | grep -A 3 'Name:'
+Name:	web-stateful-0.web-service-headless.default.svc.cluster.local
+Address: 10.244.1.72
+
+
+# addressing an individual ordinal directly (impossible with a normal ClusterIP):
+$ kubectl exec headless-dns-client -- curl -s http://web-stateful-0.web-service-headless | grep -o '<title>.*</title>'
+<title>web-stateful-0</title>
+
+$ kubectl exec headless-dns-client -- curl -s http://web-stateful-1.web-service-headless | grep -o '<title>.*</title>'
+<title>web-stateful-1</title>
+
+$ kubectl exec headless-dns-client -- curl -s http://web-stateful-2.web-service-headless | grep -o '<title>.*</title>'
+<title>web-stateful-2</title>
+

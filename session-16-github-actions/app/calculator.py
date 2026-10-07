@@ -1,5 +1,6 @@
 import re
 
+
 def add(a, b):
     return a + b
 
@@ -23,21 +24,21 @@ if __name__ == "__main__":
     print("----------------------")
     print("Available operations: +, -, *, /")
     print("Type 'q' or 'quit' to exit.")
-    
+
     while True:
         try:
             expr = input("\nEnter calculation (e.g., 10 + 5): ")
             if expr.lower() in ('q', 'quit'):
                 print("Goodbye!")
                 break
-            
+
             match = re.match(r"^\s*([\d\.]+)\s*([\+\-\*\/])\s*([\d\.]+)\s*$", expr)
             if not match:
                 print("Invalid format. Please use: number operation number (e.g., 10 + 5 or 3+5)")
                 continue
-                
+
             a, op, b = float(match.group(1)), match.group(2), float(match.group(3))
-            
+
             if op == '+':
                 print(f"Result: {add(a, b)}")
             elif op == '-':

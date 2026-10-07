@@ -1,0 +1,27 @@
+$ kubectl apply -f session10-k8s-core-objects/pod.yml
+pod/nginx-pod created
+
+$ kubectl wait --for=condition=Ready pod/nginx-pod --timeout=120s
+pod/nginx-pod condition met
+
+$ kubectl get pods
+NAME        READY   STATUS    RESTARTS   AGE
+nginx-pod   1/1     Running   0          0s
+
+$ kubectl get pods -o wide
+NAME        READY   STATUS    RESTARTS   AGE   IP           NODE           NOMINATED NODE   READINESS GATES
+nginx-pod   1/1     Running   0          0s    10.244.1.2   minikube-m02   <none>           <none>
+
+$ kubectl logs nginx-pod | tail -5
+2026/09/18 06:14:22 [notice] 1#1: start worker process 40
+2026/09/18 06:14:22 [notice] 1#1: start worker process 41
+2026/09/18 06:14:22 [notice] 1#1: start worker process 42
+2026/09/18 06:14:22 [notice] 1#1: start worker process 43
+2026/09/18 06:14:22 [notice] 1#1: start worker process 44
+
+$ kubectl delete -f session10-k8s-core-objects/pod.yml
+pod "nginx-pod" deleted from default namespace
+
+$ kubectl get pods
+No resources found in default namespace.
+

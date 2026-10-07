@@ -1,0 +1,65 @@
+# backend.yaml uses envFrom.configMapRef (bulk) AND env.valueFrom.secretKeyRef (granular)
+$ grep -A 3 'envFrom:' session-12-ingress-configmaps-secrets/04-full-demo/backend.yaml
+          envFrom:
+            - configMapRef:
+                name: yatri-app-config
+          # GRANULAR injection: pick individual keys out of the Secret.
+
+$ grep -A 6 'secretKeyRef' session-12-ingress-configmaps-secrets/04-full-demo/backend.yaml | head -12
+                secretKeyRef:
+                  name: yatri-db-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: yatri-db-secret
+                  key: POSTGRES_PASSWORD
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: src
+
+# both sources land in the same container environment:
+$ kubectl exec deploy/yatri-backend -- env | grep -E 'ENVIRONMENT|LOG_LEVEL|PORT|DEFAULT_CURRENCY|MAX_BOOKING_DAYS|POSTGRES' | sort
+DEFAULT_CURRENCY=INR
+ENVIRONMENT=production
+KUBERNETES_PORT=tcp://10.96.0.1:443
+KUBERNETES_PORT_443_TCP=tcp://10.96.0.1:443
+KUBERNETES_PORT_443_TCP_ADDR=10.96.0.1
+KUBERNETES_PORT_443_TCP_PORT=443
+KUBERNETES_PORT_443_TCP_PROTO=tcp
+KUBERNETES_SERVICE_PORT=443
+KUBERNETES_SERVICE_PORT_HTTPS=443
+LOG_LEVEL=INFO
+MAX_BOOKING_DAYS=90
+PORT=8080
+POSTGRES_PASSWORD=secretpassword
+POSTGRES_USER=yatri_admin
+YATRI_BACKEND_SERVICE_PORT=tcp://10.110.227.37:8080
+YATRI_BACKEND_SERVICE_PORT_8080_TCP=tcp://10.110.227.37:8080
+YATRI_BACKEND_SERVICE_PORT_8080_TCP_ADDR=10.110.227.37
+YATRI_BACKEND_SERVICE_PORT_8080_TCP_PORT=8080
+YATRI_BACKEND_SERVICE_PORT_8080_TCP_PROTO=tcp
+YATRI_BACKEND_SERVICE_SERVICE_PORT=8080
+YATRI_FRONTEND_SERVICE_PORT=tcp://10.106.254.183:80
+YATRI_FRONTEND_SERVICE_PORT_80_TCP=tcp://10.106.254.183:80
+YATRI_FRONTEND_SERVICE_PORT_80_TCP_ADDR=10.106.254.183
+YATRI_FRONTEND_SERVICE_PORT_80_TCP_PORT=80
+YATRI_FRONTEND_SERVICE_PORT_80_TCP_PROTO=tcp
+YATRI_FRONTEND_SERVICE_SERVICE_PORT=80
+
+# (KUBERNETES_* and YATRI_* entries are service-discovery vars the kubelet adds.)
+# 
+# and the application itself reads them at request time:
+$ kubectl exec curl-client -- curl -s http://yatri-backend-service:8080/
+Yatri Backend API
+path: /
+--------------------------------
+ENVIRONMENT: production
+LOG_LEVEL: INFO
+PORT: 8080
+DEFAULT_CURRENCY: INR
+MAX_BOOKING_DAYS: 90
+POSTGRES_USER: yatri_admin
+POSTGRES_PASSWORD: secretpassword
+

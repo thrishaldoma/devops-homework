@@ -1,0 +1,15 @@
+# Task 2 - a standalone Pod showing the four mandatory top-level fields:
+# apiVersion, kind, metadata and spec.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  labels:
+    app: nginx
+    tier: frontend
+spec:
+  containers:
+    - name: nginx
+      image: nginx:1.27-alpine
+      ports:
+        - containerPort: 80

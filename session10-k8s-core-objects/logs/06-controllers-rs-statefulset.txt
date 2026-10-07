@@ -1,0 +1,91 @@
+# ########## PART A - ReplicaSet self-healing ##########
+$ kubectl apply -f session10-k8s-core-objects/replicaset.yml
+replicaset.apps/nginx-rs created
+
+$ kubectl rollout status rs/nginx-rs --timeout=120s 2>/dev/null || kubectl wait --for=jsonpath='{.status.readyReplicas}'=3 rs/nginx-rs --timeout=120s
+replicaset.apps/nginx-rs condition met
+
+$ kubectl get rs nginx-rs
+NAME       DESIRED   CURRENT   READY   AGE
+nginx-rs   3         3         3       1s
+
+$ kubectl get pods -l app=nginx -o wide
+NAME             READY   STATUS    RESTARTS   AGE   IP            NODE           NOMINATED NODE   READINESS GATES
+nginx-rs-f9wsx   1/1     Running   0          1s    10.244.1.18   minikube-m02   <none>           <none>
+nginx-rs-fmsfp   1/1     Running   0          1s    10.244.1.19   minikube-m02   <none>           <none>
+nginx-rs-jcn6r   1/1     Running   0          1s    10.244.0.4    minikube       <none>           <none>
+
+# now delete ONE pod manually and watch the ReplicaSet controller replace it
+# deleting pod: nginx-rs-f9wsx
+$ kubectl delete pod nginx-rs-f9wsx --wait=false
+pod "nginx-rs-f9wsx" deleted from default namespace
+
+$ kubectl get pods -l app=nginx
+NAME             READY   STATUS    RESTARTS   AGE
+nginx-rs-fmsfp   1/1     Running   0          3s
+nginx-rs-jcn6r   1/1     Running   0          3s
+nginx-rs-mj7qg   1/1     Running   0          2s
+
+# desired count of 3 restored automatically - note the new pod name and young AGE
+$ kubectl get pods -l app=nginx
+NAME             READY   STATUS    RESTARTS   AGE
+nginx-rs-fmsfp   1/1     Running   0          15s
+nginx-rs-jcn6r   1/1     Running   0          15s
+nginx-rs-mj7qg   1/1     Running   0          14s
+
+$ kubectl get rs nginx-rs
+NAME       DESIRED   CURRENT   READY   AGE
+nginx-rs   3         3         3       15s
+
+$ kubectl delete -f session10-k8s-core-objects/replicaset.yml --wait=false
+replicaset.apps "nginx-rs" deleted from default namespace
+
+# ########## PART B - StatefulSet: ordinal identity + per-pod PVC ##########
+$ kubectl apply -f session10-k8s-core-objects/k8s-core-objects/statefulset.yml
+service/mysql created
+statefulset.apps/mysql created
+
+# pods are created strictly in order: mysql-0 must be Ready before mysql-1 starts
+$ while true; do kubectl get pods -l app=mysql --no-headers; sleep 5; done
+mysql-0 0/1 ContainerCreating | 
+mysql-0 1/1 Running | mysql-1 0/1 ContainerCreating | 
+mysql-0 1/1 Running | mysql-1 1/1 Running | 
+
+$ kubectl get statefulset mysql
+NAME    READY   AGE
+mysql   2/2     76s
+
+$ kubectl get pods -l app=mysql -o wide
+NAME      READY   STATUS    RESTARTS   AGE   IP            NODE           NOMINATED NODE   READINESS GATES
+mysql-0   1/1     Running   0          76s   10.244.1.21   minikube-m02   <none>           <none>
+mysql-1   1/1     Running   0          38s   10.244.0.5    minikube       <none>           <none>
+
+# each ordinal gets its OWN PersistentVolumeClaim from volumeClaimTemplates:
+$ kubectl get pvc -l app=mysql
+NAME           STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+data-mysql-0   Bound    pvc-73fad1b2-f535-4976-adeb-d3e913358ed8   1Gi        RWO            standard       <unset>                 76s
+data-mysql-1   Bound    pvc-efd8fe66-61a2-41a1-8026-00d605b4874c   1Gi        RWO            standard       <unset>                 38s
+
+$ kubectl get pv --sort-by=.spec.claimRef.name -o custom-columns='PV:.metadata.name,CAPACITY:.spec.capacity.storage,STATUS:.status.phase,CLAIM:.spec.claimRef.name'
+PV                                         CAPACITY   STATUS   CLAIM
+pvc-73fad1b2-f535-4976-adeb-d3e913358ed8   1Gi        Bound    data-mysql-0
+pvc-efd8fe66-61a2-41a1-8026-00d605b4874c   1Gi        Bound    data-mysql-1
+
+# deleting mysql-0 proves ordinal identity is invariant (same name comes back):
+$ kubectl delete pod mysql-0 --wait=false
+pod "mysql-0" deleted from default namespace
+
+$ kubectl get pods -l app=mysql
+NAME      READY   STATUS    RESTARTS   AGE
+mysql-0   1/1     Running   0          24s
+mysql-1   1/1     Running   0          75s
+
+$ kubectl delete -f session10-k8s-core-objects/k8s-core-objects/statefulset.yml --wait=false
+service "mysql" deleted from default namespace
+statefulset.apps "mysql" deleted from default namespace
+
+$ kubectl delete pvc -l app=mysql --wait=false
+persistentvolumeclaim "data-mysql-0" deleted from default namespace
+persistentvolumeclaim "data-mysql-1" deleted from default namespace
+
+# NOTE: PVCs are intentionally NOT garbage-collected with the StatefulSet; deleted explicitly above.

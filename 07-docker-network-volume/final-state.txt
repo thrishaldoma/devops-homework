@@ -1,0 +1,47 @@
+===== FINAL STATE OF PHASE 7 RESOURCES =====
+Name: THRISHAL DOMA    Enrollment No: 24BCS10097
+Captured: Fri Sep  4 23:09:36 IST 2026
+
+===== docker ps =====
+CONTAINER ID   IMAGE                 COMMAND                  CREATED          STATUS          PORTS                                         NAMES
+49c3020eaedd   nginx:alpine          "/docker-entrypoint.…"   38 seconds ago   Up 37 seconds   0.0.0.0:8091->80/tcp, [::]:8091->80/tcp       nginx-vol
+fc332b1e582d   nginx:alpine          "/docker-entrypoint.…"   2 minutes ago    Up 2 minutes    0.0.0.0:8090->80/tcp, [::]:8090->80/tcp       nginx-bind
+4c67db6fe573   httpd:2.4             "httpd-foreground"       3 minutes ago    Up 3 minutes                                                  apache-host
+a5fa527b5698   mysql:8.0             "docker-entrypoint.s…"   4 minutes ago    Up 4 minutes    3306/tcp, 33060/tcp                           database
+c2d3fe4e9fc7   alpine:latest         "sleep infinity"         4 minutes ago    Up 4 minutes                                                  backend
+258639d49702   alpine:latest         "sleep infinity"         4 minutes ago    Up 4 minutes                                                  frontend
+88425e3098c6   multistage-hello:v1   "docker-entrypoint.s…"   7 minutes ago    Up 7 minutes    0.0.0.0:8080->3000/tcp, [::]:8080->3000/tcp   multistage-app
+dc5bf8000a74   nginx-hello:v1        "/docker-entrypoint.…"   11 minutes ago   Up 11 minutes   0.0.0.0:8083->80/tcp, [::]:8083->80/tcp       nginx-app
+48548c7ad659   react-hello:v1        "/docker-entrypoint.…"   11 minutes ago   Up 11 minutes   0.0.0.0:3001->80/tcp, [::]:3001->80/tcp       react-app
+0e596c824945   apache-hello:v1       "httpd-foreground"       11 minutes ago   Up 11 minutes   0.0.0.0:8082->80/tcp, [::]:8082->80/tcp       apache-app
+95e5499e18d6   java-hello:v1         "/__cacert_entrypoin…"   11 minutes ago   Up 11 minutes   0.0.0.0:8081->8080/tcp, [::]:8081->8080/tcp   java-app
+37d21930d01a   python-hello:v1       "python app.py"          11 minutes ago   Up 11 minutes   0.0.0.0:5001->5000/tcp, [::]:5001->5000/tcp   python-app
+715b76cd11b7   nodejs-hello:v1       "docker-entrypoint.s…"   11 minutes ago   Up 11 minutes   0.0.0.0:3000->3000/tcp, [::]:3000->3000/tcp   nodejs-app
+4f1eb9c1623d   linux-lab:v1          "/sbin/init"             28 minutes ago   Up 28 minutes                                                 linux-lab
+
+===== docker network ls =====
+NETWORK ID     NAME              DRIVER    SCOPE
+f2ed42fbb91c   backend-net       bridge    local
+c2be6c3374ec   bridge            bridge    local
+9f577d9523f9   db-net            bridge    local
+5ebf59c865fa   docker_gwbridge   bridge    local
+938608324f0c   frontend-net      bridge    local
+8da6b07fd132   host              host      local
+826e9c36714c   none              null      local
+
+===== docker volume ls =====
+DRIVER    VOLUME NAME
+local     5dd4dc399b4ac88690f6461903ca6df549cf01ce497c1741c27245526952f2bd
+local     site-data
+
+===== backend network memberships (on TWO networks) =====
+backend-net 172.19.0.2
+frontend-net 172.18.0.3
+
+===== per-network container lists =====
+frontend-net   : frontend backend 
+backend-net    : database backend 
+db-net         : database 
+
+===== swarm state (left after the overlay demo) =====
+inactive

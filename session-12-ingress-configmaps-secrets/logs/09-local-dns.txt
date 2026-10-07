@@ -1,0 +1,19 @@
+$ minikube ip
+192.168.49.2
+
+# The assignment maps this IP into /etc/hosts with sudo. Passwordless sudo is not
+# available in this environment, and (per Session 11 Task 12) macOS cannot route to
+# 192.168.49.0/24 anyway, so an /etc/hosts entry alone would not work here.
+$ grep -E 'yatri.local|campus.local' /etc/hosts || echo '(no entry present - sudo unavailable)'
+(no entry present - sudo unavailable)
+
+# 
+# Equivalent sudo-free approach used throughout this session:
+#   1. kubectl port-forward the ingress controller to 127.0.0.1:18080
+#   2. send the hostname in the HTTP Host header (exactly what /etc/hosts would cause)
+# The Ingress controller routes on the Host header, so this exercises the same path.
+# 
+# For reference, the line you would add on a Linux box:
+$ echo "$(minikube ip)  yatri.local portal.campus.local api.campus.local"
+192.168.49.2  yatri.local portal.campus.local api.campus.local
+

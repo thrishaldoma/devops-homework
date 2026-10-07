@@ -1,0 +1,95 @@
+$ kubectl apply -f session10-k8s-core-objects/03-canary/deployment-stable.yaml -f session10-k8s-core-objects/03-canary/service.yaml
+deployment.apps/app-stable created
+service/myapp-canary-service created
+
+$ kubectl rollout status deployment/app-stable --timeout=240s
+Waiting for deployment "app-stable" rollout to finish: 0 of 9 updated replicas are available...
+Waiting for deployment "app-stable" rollout to finish: 1 of 9 updated replicas are available...
+Waiting for deployment "app-stable" rollout to finish: 2 of 9 updated replicas are available...
+Waiting for deployment "app-stable" rollout to finish: 3 of 9 updated replicas are available...
+Waiting for deployment "app-stable" rollout to finish: 4 of 9 updated replicas are available...
+Waiting for deployment "app-stable" rollout to finish: 5 of 9 updated replicas are available...
+Waiting for deployment "app-stable" rollout to finish: 6 of 9 updated replicas are available...
+Waiting for deployment "app-stable" rollout to finish: 7 of 9 updated replicas are available...
+Waiting for deployment "app-stable" rollout to finish: 8 of 9 updated replicas are available...
+deployment "app-stable" successfully rolled out
+
+# ===== introduce the canary: 1 pod alongside 9 stable = ~10% of traffic =====
+$ kubectl apply -f session10-k8s-core-objects/03-canary/deployment-canary.yaml
+deployment.apps/app-canary created
+
+$ kubectl rollout status deployment/app-canary --timeout=240s
+Waiting for deployment "app-canary" rollout to finish: 0 of 1 updated replicas are available...
+deployment "app-canary" successfully rolled out
+
+$ kubectl get pods -l app=myapp-canary -o custom-columns='POD:.metadata.name,TRACK:.metadata.labels.track,VERSION:.metadata.labels.version' | head -12
+POD                           TRACK    VERSION
+app-canary-6bfd8dc766-z6hvq   canary   v2
+app-stable-b89d8cbcd-22tzr    stable   v1
+app-stable-b89d8cbcd-2bwx8    stable   v1
+app-stable-b89d8cbcd-42r8z    stable   v1
+app-stable-b89d8cbcd-8txtn    stable   v1
+app-stable-b89d8cbcd-cwtfw    stable   v1
+app-stable-b89d8cbcd-dkqhx    stable   v1
+app-stable-b89d8cbcd-fzvtk    stable   v1
+app-stable-b89d8cbcd-mk69b    stable   v1
+app-stable-b89d8cbcd-mp52s    stable   v1
+
+# the Service selects only app=myapp-canary, so BOTH tracks are endpoints:
+$ kubectl get endpointslice -l kubernetes.io/service-name=myapp-canary-service -o jsonpath='{range .items[*].endpoints[*]}{.addresses[0]}{"\n"}{end}' | wc -l | xargs echo 'total endpoints:'
+total endpoints: 10
+
+# ===== 40-request traffic test from inside the cluster =====
+$ kubectl exec curl-client -- sh -c 'for i in $(seq 1 40); do curl -s http://myapp-canary-service; done' | sort | uniq -c | sort -rn
+  36 STABLE v1
+   4 CANARY v2
+
+# (36/40 = 90% stable, 4/40 = 10% canary - the ratio is simply the pod-count ratio)
+# 
+# ===== shift the split to 30% canary / 70% stable =====
+$ kubectl scale deployment app-canary --replicas=3
+deployment.apps/app-canary scaled
+
+$ kubectl scale deployment app-stable --replicas=7
+deployment.apps/app-stable scaled
+
+$ kubectl rollout status deployment/app-canary --timeout=240s
+Waiting for deployment "app-canary" rollout to finish: 1 of 3 updated replicas are available...
+Waiting for deployment "app-canary" rollout to finish: 2 of 3 updated replicas are available...
+deployment "app-canary" successfully rolled out
+
+$ kubectl get deploy app-stable app-canary
+NAME         READY   UP-TO-DATE   AVAILABLE   AGE
+app-stable   7/7     7            7           26s
+app-canary   3/3     3            3           26s
+
+$ kubectl exec curl-client -- sh -c 'for i in $(seq 1 40); do curl -s http://myapp-canary-service; done' | sort | uniq -c | sort -rn
+  27 STABLE v1
+  13 CANARY v2
+
+# ===== abort the canary: scale it to zero, restore stable to 9 =====
+$ kubectl scale deployment app-canary --replicas=0
+deployment.apps/app-canary scaled
+
+$ kubectl scale deployment app-stable --replicas=9
+deployment.apps/app-stable scaled
+
+$ kubectl rollout status deployment/app-stable --timeout=240s
+Waiting for deployment "app-stable" rollout to finish: 7 of 9 updated replicas are available...
+Waiting for deployment "app-stable" rollout to finish: 8 of 9 updated replicas are available...
+deployment "app-stable" successfully rolled out
+
+$ kubectl get deploy app-stable app-canary
+NAME         READY   UP-TO-DATE   AVAILABLE   AGE
+app-stable   9/9     9            9           35s
+app-canary   0/0     0            0           35s
+
+$ kubectl exec curl-client -- sh -c 'for i in $(seq 1 20); do curl -s http://myapp-canary-service; done' | sort | uniq -c | sort -rn
+  20 STABLE v1
+
+# 100% of traffic is back on stable - no rollout, no image change, just replica counts
+$ kubectl delete -f session10-k8s-core-objects/03-canary/service.yaml -f session10-k8s-core-objects/03-canary/deployment-canary.yaml -f session10-k8s-core-objects/03-canary/deployment-stable.yaml --wait=false
+service "myapp-canary-service" deleted from default namespace
+deployment.apps "app-canary" deleted from default namespace
+deployment.apps "app-stable" deleted from default namespace
+

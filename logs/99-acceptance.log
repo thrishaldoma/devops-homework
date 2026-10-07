@@ -1,0 +1,68 @@
+== NO-GIT RULE ==
+  PASS  no git artefacts anywhere in the deliverable
+  PASS  git sandbox removed
+== STRUCTURE ==
+  PASS  01-linux/
+  PASS  02-shell-scripting/
+  PASS  03-networking/
+  PASS  04-git-github/
+  PASS  05-docker-apps/
+  PASS  06-docker-multistage/
+  PASS  07-docker-network-volume/
+  PASS  screenshots/
+  PASS  logs/
+  PASS  05-docker-apps/nodejs-app/
+  PASS  05-docker-apps/nodejs-app/Dockerfile
+  PASS  05-docker-apps/python-app/
+  PASS  05-docker-apps/python-app/Dockerfile
+  PASS  05-docker-apps/java-app/
+  PASS  05-docker-apps/java-app/Dockerfile
+  PASS  05-docker-apps/Apache-app/
+  PASS  05-docker-apps/Apache-app/Dockerfile
+  PASS  05-docker-apps/React-app/
+  PASS  05-docker-apps/React-app/Dockerfile
+  PASS  05-docker-apps/nginx-app/
+  PASS  05-docker-apps/nginx-app/Dockerfile
+== READMEs ==
+  PASS  README.md
+  PASS  01-linux/README.md
+  PASS  02-shell-scripting/README.md
+  PASS  03-networking/networking-commands.md
+  PASS  04-git-github/README.md
+  PASS  05-docker-apps/README.md
+  PASS  06-docker-multistage/README.md
+  PASS  07-docker-network-volume/README.md
+== NAME AND ENROLLMENT PRESENT ==
+  PASS  enrollment in 07-docker-network-volume/README.md
+  PASS  enrollment in 04-git-github/README.md
+  PASS  enrollment in 06-docker-multistage/README.md
+  PASS  enrollment in devops-homework/README.md
+  PASS  enrollment in logs/ISSUES.md
+  PASS  enrollment in 02-shell-scripting/README.md
+  PASS  enrollment in 03-networking/README.md
+  PASS  enrollment in 03-networking/networking-commands.md
+  PASS  enrollment in 05-docker-apps/README.md
+  PASS  enrollment in 01-linux/README.md
+== KEY ARTEFACTS ==
+  PASS  02-shell-scripting/sysinfo.sh
+  PASS  02-shell-scripting/system-report/process.log
+  PASS  06-docker-multistage/Dockerfile
+  PASS  07-docker-network-volume/final-state.txt
+  PASS  04-git-github/transcript.txt
+  PASS  01-linux/lab-environment/Dockerfile
+== LOGS ==
+  PASS  logs/01-linux.log
+  PASS  logs/02-shell.log
+  PASS  logs/03-networking.log
+  PASS  logs/04-git.log
+  PASS  logs/05-docker-apps.log
+  PASS  logs/06-multistage.log
+  PASS  logs/07-network-volume.log
+== SCREENSHOTS ==
+  PASS  10 non-trivial screenshots
+== NO BUILD JUNK COMMITTED ==
+  PASS  no node_modules in deliverable
+  PASS  no dist in deliverable
+
+RESULT: 57 passed, 0 failed
+ACCEPTANCE: PASS

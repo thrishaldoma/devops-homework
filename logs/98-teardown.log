@@ -1,0 +1,46 @@
+===== TEARDOWN - only resources created by this run, by exact name =====
+Started: Fri Sep  4 23:14:11 IST 2026
+
+--- containers ---
+removed container linux-lab
+removed container nodejs-app
+removed container python-app
+removed container java-app
+removed container apache-app
+removed container react-app
+removed container nginx-app
+removed container multistage-app
+removed container frontend
+removed container backend
+removed container database
+removed container apache-host
+removed container nginx-bind
+removed container nginx-vol
+removed container ov1
+removed container ov2
+
+--- images built by this run, by exact tag ---
+removed image linux-lab:v1
+removed image nodejs-hello:v1
+removed image python-hello:v1
+removed image java-hello:v1
+removed image apache-hello:v1
+removed image react-hello:v1
+removed image nginx-hello:v1
+removed image multistage-hello:v1
+removed image singlestage-hello:v1
+
+--- networks ---
+removed network frontend-net
+removed network backend-net
+removed network db-net
+--- docker_gwbridge (created by this run's 'docker swarm init') ---
+removed network docker_gwbridge
+
+--- volumes ---
+removed volume site-data
+--- anonymous volume created by this run's mysql:8.0 container ---
+removed dangling volume 5dd4dc399b4ac88690f6461903ca6df549cf01ce497c1741c27245526952f2bd
+
+--- scratch space ---
+removed /tmp scratch files

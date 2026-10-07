@@ -1,0 +1,53 @@
+$ kubectl get ingress yatri-ingress
+NAME            CLASS   HOSTS         ADDRESS        PORTS   AGE
+yatri-ingress   nginx   yatri.local   192.168.49.2   80      101s
+
+$ kubectl describe ingress yatri-ingress
+Name:             yatri-ingress
+Labels:           app=yatri-app
+Namespace:        default
+Address:          192.168.49.2
+Ingress Class:    nginx
+Default backend:  <default>
+Rules:
+  Host         Path  Backends
+  ----         ----  --------
+  yatri.local  
+               /api(/|$)(.*)   yatri-backend-service:8080 (10.244.1.78:8080,10.244.0.34:8080)
+               /               yatri-frontend-service:80 (10.244.0.32:80,10.244.1.76:80)
+Annotations:   nginx.ingress.kubernetes.io/rewrite-target: /$2
+Events:
+  Type    Reason  Age                  From                      Message
+  ----    ------  ----                 ----                      -------
+  Normal  Sync    100s (x2 over 101s)  nginx-ingress-controller  Scheduled for sync
+
+# ===== '/' goes to the FRONTEND (nginx) =====
+$ curl -s -H 'Host: yatri.local' http://127.0.0.1:18080/ | grep -i '<title>'
+<title>Welcome to nginx!</title>
+
+# ===== '/api/' goes to the BACKEND (python) =====
+$ curl -s -H 'Host: yatri.local' http://127.0.0.1:18080/api/
+Yatri Backend API
+path: /
+--------------------------------
+ENVIRONMENT: production
+LOG_LEVEL: INFO
+PORT: 8080
+DEFAULT_CURRENCY: INR
+MAX_BOOKING_DAYS: 90
+POSTGRES_USER: yatri_admin
+POSTGRES_PASSWORD: secretpassword
+
+# ===== the rewrite-target strips the /api prefix before forwarding =====
+# the backend reports the path it actually received:
+$ curl -s -H 'Host: yatri.local' http://127.0.0.1:18080/api/bookings | grep '^path:'
+path: /bookings
+
+# client asked for /api/bookings; the backend saw /bookings (rewrite-target: /$2)
+# ===== a host with no matching rule is not routed =====
+$ curl -s -o /dev/null -w 'Host: unknown.local -> HTTP %{http_code}\n' -H 'Host: unknown.local' http://127.0.0.1:18080/
+Host: unknown.local -> HTTP 404
+
+$ curl -s -o /dev/null -w 'Host: yatri.local   -> HTTP %{http_code}\n' -H 'Host: yatri.local' http://127.0.0.1:18080/
+Host: yatri.local   -> HTTP 200
+

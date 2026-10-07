@@ -1,0 +1,59 @@
+$ kubectl apply -f session-11-kubernetes-services/04-externalname/service.yaml -f session-11-kubernetes-services/04-externalname/client-pod.yaml
+service/external-database-service created
+pod/dns-test-client created
+
+$ kubectl wait --for=condition=ready pod/dns-test-client --timeout=180s
+pod/dns-test-client condition met
+
+# TYPE is ExternalName, CLUSTER-IP is <none>, EXTERNAL-IP holds the target domain.
+$ kubectl get svc external-database-service
+NAME                        TYPE           CLUSTER-IP   EXTERNAL-IP      PORT(S)   AGE
+external-database-service   ExternalName   <none>       api.github.com   <none>    1s
+
+# no selector -> no EndpointSlice is created at all:
+$ kubectl get endpointslice -l kubernetes.io/service-name=external-database-service 2>&1 | head -3
+No resources found in default namespace.
+
+# CoreDNS answers the in-cluster name with a CNAME to the external domain:
+$ kubectl exec dns-test-client -- nslookup external-database-service 2>&1 | head -14
+Server:		10.96.0.10
+Address:	10.96.0.10:53
+
+** server can't find external-database-service.svc.cluster.local: NXDOMAIN
+
+** server can't find external-database-service.cluster.local: NXDOMAIN
+
+** server can't find external-database-service.svc.cluster.local: NXDOMAIN
+
+** server can't find external-database-service.cluster.local: NXDOMAIN
+
+external-database-service.default.svc.cluster.local	canonical name = api.github.com
+
+external-database-service.default.svc.cluster.local	canonical name = api.github.com
+
+# NOTE the NXDOMAIN lines above: that is the ndots:5 search-path expansion at work
+# (see Task 8). The last suffix tried, .default.svc.cluster.local, is the hit.
+# 
+# Traffic to the internal name reaches the external host. -k is required because
+# the TLS certificate is issued for api.github.com, not for our alias:
+$ kubectl exec dns-test-client -- curl -s -o /dev/null -w 'https://external-database-service -> HTTP %{http_code}\n' --max-time 20 -k https://external-database-service
+https://external-database-service -> HTTP 400
+
+# without -k the handshake fails with exit 60 (certificate name mismatch):
+$ kubectl exec dns-test-client -- curl -s --max-time 20 https://external-database-service 2>&1 | head -2; echo "curl exit code: $?"
+command terminated with exit code 60
+curl exit code: 0
+
+# HTTP 400 proves we really reached GitHub (it rejects the unexpected Host header).
+# Sending the correct Host header through the same alias returns a real API response:
+$ kubectl exec curl-client -- curl -sS --max-time 25 -k -H 'Host: api.github.com' -o /tmp/gh.json -w 'HTTP %{http_code}, %{size_download} bytes from %{remote_ip}\n' https://external-database-service
+HTTP 200, 2396 bytes from 20.207.73.85
+
+$ kubectl exec curl-client -- head -c 100 /tmp/gh.json; echo
+{
+  "current_user_url": "https://api.github.com/user",
+  "current_user_authorizations_html_url": "ht
+
+$ kubectl delete -f session-11-kubernetes-services/04-externalname/service.yaml --wait=false
+service "external-database-service" deleted from default namespace
+

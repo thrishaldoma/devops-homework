@@ -1,0 +1,29 @@
+===== PROCESS REPORT =====
+Generated : Friday, 04 September 2026 - 17:17:13
+Host      : 4f1eb9c1623d
+User      : root
+Student   : THRISHAL DOMA (24BCS10097)
+
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root           1  0.0  0.1  18704  9700 ?        Ss   17:10   0:00 /sbin/init
+root          23  0.0  0.1  48084 14340 ?        S<s  17:10   0:00 /lib/systemd/systemd-journald
+message+     343  0.0  0.0   7764  3752 ?        Ss   17:12   0:00 @dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only
+root         345  0.0  0.0  15300  6848 ?        Ss   17:12   0:00 /lib/systemd/systemd-logind
+root         715  0.0  0.0  55076  2288 ?        Ss   17:12   0:00 nginx: master process /usr/sbin/nginx -g daemon on; master_process on;
+www-data     716  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     717  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     718  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     719  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     720  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     721  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     722  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     723  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     724  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     725  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     726  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     727  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     728  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     729  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     730  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+root        1121  0.0  0.0   3888  2804 ?        Ss   17:17   0:00 /bin/bash ./sysinfo.sh
+root        1138  0.0  0.0   6456  2464 ?        R    17:17   0:00 ps aux

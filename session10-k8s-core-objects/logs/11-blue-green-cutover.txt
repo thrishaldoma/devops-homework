@@ -1,0 +1,94 @@
+$ kubectl apply -f session10-k8s-core-objects/02-blue-green/deployment-blue.yaml -f session10-k8s-core-objects/02-blue-green/deployment-green.yaml
+deployment.apps/app-blue unchanged
+deployment.apps/app-green created
+
+$ kubectl rollout status deployment/app-blue --timeout=180s
+deployment "app-blue" successfully rolled out
+
+$ kubectl rollout status deployment/app-green --timeout=180s
+Waiting for deployment "app-green" rollout to finish: 0 of 3 updated replicas are available...
+Waiting for deployment "app-green" rollout to finish: 1 of 3 updated replicas are available...
+Waiting for deployment "app-green" rollout to finish: 2 of 3 updated replicas are available...
+deployment "app-green" successfully rolled out
+
+# both environments run side by side (6 pods); only the Service selector decides who is live
+$ kubectl get pods -l app=myapp -o custom-columns='POD:.metadata.name,SLOT:.metadata.labels.slot,VERSION:.metadata.labels.version,IP:.status.podIP'
+POD                          SLOT    VERSION   IP
+app-blue-6b8d846b99-2tzvb    blue    v1        10.244.1.39
+app-blue-6b8d846b99-6vng2    blue    v1        10.244.0.13
+app-blue-6b8d846b99-rtf45    blue    v1        10.244.1.38
+app-green-77f8854f44-5cc9w   green   v2        10.244.1.40
+app-green-77f8854f44-9gs6c   green   v2        10.244.0.14
+app-green-77f8854f44-hpcg9   green   v2        10.244.1.41
+
+# ===== route live traffic to BLUE =====
+$ kubectl apply -f session10-k8s-core-objects/02-blue-green/service-blue.yaml
+service/myapp-service created
+
+$ kubectl describe svc myapp-service | grep -E 'Selector|Endpoints'
+Selector:                 app=myapp,slot=blue
+Endpoints:                10.244.1.39:80,10.244.1.38:80,10.244.0.13:80
+
+$ kubectl exec curl-client -- sh -c 'for i in 1 2 3 4 5 6; do curl -sS http://myapp-service; echo; done'
+<h1>MyApp</h1><p>BLUE ENVIRONMENT</p>
+
+<h1>MyApp</h1><p>BLUE ENVIRONMENT</p>
+
+<h1>MyApp</h1><p>BLUE ENVIRONMENT</p>
+
+<h1>MyApp</h1><p>BLUE ENVIRONMENT</p>
+
+<h1>MyApp</h1><p>BLUE ENVIRONMENT</p>
+
+<h1>MyApp</h1><p>BLUE ENVIRONMENT</p>
+
+
+# ===== THE SWITCH: flip the Service selector to GREEN =====
+$ kubectl apply -f session10-k8s-core-objects/02-blue-green/service-green.yaml
+service/myapp-service configured
+
+$ kubectl describe svc myapp-service | grep -E 'Selector|Endpoints'
+Selector:                 app=myapp,slot=green
+Endpoints:                10.244.1.41:80,10.244.0.14:80,10.244.1.40:80
+
+$ kubectl exec curl-client -- sh -c 'for i in 1 2 3 4 5 6; do curl -sS http://myapp-service; echo; done'
+<h1>MyApp</h1><p>GREEN ENVIRONMENT</p>
+
+<h1>MyApp</h1><p>GREEN ENVIRONMENT</p>
+
+<h1>MyApp</h1><p>GREEN ENVIRONMENT</p>
+
+<h1>MyApp</h1><p>GREEN ENVIRONMENT</p>
+
+<h1>MyApp</h1><p>GREEN ENVIRONMENT</p>
+
+<h1>MyApp</h1><p>GREEN ENVIRONMENT</p>
+
+
+# 100% of traffic is on green - no mixed-version window, the endpoint set is swapped wholesale
+# ===== INSTANT ROLLBACK: flip the selector back to BLUE =====
+$ kubectl apply -f session10-k8s-core-objects/02-blue-green/service-blue.yaml
+service/myapp-service configured
+
+$ kubectl describe svc myapp-service | grep -E 'Selector|Endpoints'
+Selector:                 app=myapp,slot=blue
+Endpoints:                10.244.0.13:80,10.244.1.38:80,10.244.1.39:80
+
+$ kubectl exec curl-client -- sh -c 'for i in 1 2 3 4; do curl -sS http://myapp-service; echo; done'
+<h1>MyApp</h1><p>BLUE ENVIRONMENT</p>
+
+<h1>MyApp</h1><p>BLUE ENVIRONMENT</p>
+
+<h1>MyApp</h1><p>BLUE ENVIRONMENT</p>
+
+<h1>MyApp</h1><p>BLUE ENVIRONMENT</p>
+
+
+# NOTE: the endpoint swap is atomic in the API, but kube-proxy needs ~1-2s to reprogram
+# iptables on every node. Traffic was gated on observed endpoints before curling.
+# ===== cleanup: decommission the idle blue environment =====
+$ kubectl delete -f session10-k8s-core-objects/02-blue-green/service-blue.yaml -f session10-k8s-core-objects/02-blue-green/deployment-blue.yaml -f session10-k8s-core-objects/02-blue-green/deployment-green.yaml --wait=false
+service "myapp-service" deleted from default namespace
+deployment.apps "app-blue" deleted from default namespace
+deployment.apps "app-green" deleted from default namespace
+

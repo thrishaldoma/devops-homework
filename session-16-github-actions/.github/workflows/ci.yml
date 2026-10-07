@@ -27,8 +27,8 @@ jobs:
     name: Unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           cache: pip
@@ -42,7 +42,7 @@ jobs:
         run: pytest -v --junitxml=test-results.xml
       - name: Upload test results
         if: always()           # publish results even when the tests fail
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: test-results
           path: ${{ env.APP_DIR }}/test-results.xml
@@ -52,8 +52,8 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - run: pip install flake8
@@ -66,7 +66,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Run build script
         working-directory: ${{ env.APP_DIR }}
         run: |
@@ -76,7 +76,7 @@ jobs:
         working-directory: ${{ env.APP_DIR }}
         run: cat build/build-info.txt
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: calculator-build
           path: ${{ env.APP_DIR }}/build/
@@ -87,7 +87,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Check for committed secrets
         run: |
           echo "Scanning for files that should never be committed..."
@@ -104,7 +104,7 @@ jobs:
     needs: [lint, build, security-scan]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: docker/setup-buildx-action@v3
       - name: Build image (tests run inside the build)
         uses: docker/build-push-action@v6

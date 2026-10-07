@@ -1,0 +1,11 @@
+# Phase: Running - the steady state. Container started and has not terminated.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lifecycle-running
+spec:
+  containers:
+    - name: web
+      image: nginx:1.27-alpine
+      ports:
+        - containerPort: 80

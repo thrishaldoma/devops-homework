@@ -1,0 +1,14 @@
+# NodePort opens the SAME high port on EVERY node in the cluster and forwards
+# to the service, which forwards to a pod. It implicitly creates a ClusterIP too.
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service-nodeport
+spec:
+  type: NodePort
+  selector:
+    app: web-nodeport
+  ports:
+    - port: 80          # service (ClusterIP) port
+      targetPort: 80    # pod port
+      nodePort: 30080   # host port on every node (valid range 30000-32767)

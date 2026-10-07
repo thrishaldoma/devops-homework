@@ -1,0 +1,14 @@
+# Phase: Pending - the API object exists in etcd, but the scheduler cannot
+# place it because no node can satisfy a 512Gi memory request.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lifecycle-pending
+spec:
+  containers:
+    - name: greedy
+      image: nginx:1.27-alpine
+      resources:
+        requests:
+          memory: "512Gi"
+          cpu: "64"

@@ -1,0 +1,14 @@
+# Selects only app=myapp-canary (NOT track), so stable + canary pods all
+# become endpoints. Traffic split is therefore the pod-count ratio.
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp-canary-service
+spec:
+  type: NodePort
+  selector:
+    app: myapp-canary
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30030

@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-canary
+  labels:
+    app: myapp-canary
+    track: canary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: myapp-canary
+      track: canary
+  template:
+    metadata:
+      labels:
+        app: myapp-canary     # shared label -> both tracks join the same Service
+        track: canary
+        version: v2
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.27-alpine
+          command: ["/bin/sh", "-c"]
+          args:
+            - echo "CANARY v2" > /usr/share/nginx/html/index.html && exec nginx -g 'daemon off;'
+          ports:
+            - containerPort: 80

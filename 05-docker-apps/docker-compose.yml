@@ -1,0 +1,19 @@
+services:
+  nodejs-app:
+    build: ./nodejs-app
+    ports: ["3000:3000"]
+  python-app:
+    build: ./python-app
+    ports: ["5001:5000"]
+  java-app:
+    build: ./java-app
+    ports: ["8081:8080"]
+  apache-app:
+    build: ./Apache-app
+    ports: ["8082:80"]
+  react-app:
+    build: ./React-app
+    ports: ["3001:80"]
+  nginx-app:
+    build: ./nginx-app
+    ports: ["8083:80"]

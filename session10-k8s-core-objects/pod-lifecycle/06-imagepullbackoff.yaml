@@ -1,0 +1,11 @@
+# Waiting reason: ErrImagePull -> ImagePullBackOff.
+# The API object is accepted and stored in etcd; only the kubelet's runtime
+# step fails, which is why `kubectl get pod` shows the object but not Running.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lifecycle-image-error
+spec:
+  containers:
+    - name: broken
+      image: nginx:this-tag-does-not-exist-9999

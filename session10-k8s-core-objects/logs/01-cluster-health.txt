@@ -1,0 +1,33 @@
+$ kubectl version --output=yaml | head -20
+clientVersion:
+  buildDate: "2026-08-26T10:44:20Z"
+  compiler: gc
+  gitCommit: f54c212e3a2f75d674b717a9b29052b20b60aefc
+  gitTreeState: clean
+  gitVersion: v1.37.0
+  goVersion: go1.27.0
+  major: "1"
+  minor: "37"
+  platform: darwin/arm64
+kustomizeVersion: v5.8.1
+serverVersion:
+  buildDate: "2026-08-26T10:44:25Z"
+  compiler: gc
+  emulationMajor: "1"
+  emulationMinor: "37"
+  gitCommit: f54c212e3a2f75d674b717a9b29052b20b60aefc
+  gitTreeState: clean
+  gitVersion: v1.37.0
+  goVersion: go1.26.6
+
+$ kubectl cluster-info
+Kubernetes control plane is running at https://127.0.0.1:52418
+CoreDNS is running at https://127.0.0.1:52418/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+
+$ kubectl get nodes -o wide
+NAME           STATUS   ROLES           AGE     VERSION   INTERNAL-IP    EXTERNAL-IP   OS-IMAGE                         KERNEL-VERSION            CONTAINER-RUNTIME
+minikube       Ready    control-plane   8m59s   v1.37.0   192.168.49.2   <none>        Debian GNU/Linux 12 (bookworm)   7.0.12-linuxkit (arm64)   containerd://2.3.4
+minikube-m02   Ready    <none>          8m44s   v1.37.0   192.168.49.3   <none>        Debian GNU/Linux 12 (bookworm)   7.0.12-linuxkit (arm64)   containerd://2.3.4
+

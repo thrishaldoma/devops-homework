@@ -1,0 +1,42 @@
+$ kubectl apply -f session-11-kubernetes-services/01-clusterip/app-deployment.yaml -f session-11-kubernetes-services/01-clusterip/service.yaml
+deployment.apps/web-app-clusterip created
+service/web-service-clusterip created
+
+$ kubectl rollout status deployment/web-app-clusterip --timeout=240s
+Waiting for deployment "web-app-clusterip" rollout to finish: 0 of 3 updated replicas are available...
+Waiting for deployment "web-app-clusterip" rollout to finish: 1 of 3 updated replicas are available...
+Waiting for deployment "web-app-clusterip" rollout to finish: 2 of 3 updated replicas are available...
+deployment "web-app-clusterip" successfully rolled out
+
+$ kubectl get pods -l app=web-clusterip -o wide
+NAME                                 READY   STATUS    RESTARTS   AGE   IP            NODE           NOMINATED NODE   READINESS GATES
+web-app-clusterip-6ccf84dc4f-mdjp6   1/1     Running   0          1s    10.244.0.26   minikube       <none>           <none>
+web-app-clusterip-6ccf84dc4f-v2qmj   1/1     Running   0          1s    10.244.1.64   minikube-m02   <none>           <none>
+web-app-clusterip-6ccf84dc4f-wwgkk   1/1     Running   0          1s    10.244.1.65   minikube-m02   <none>           <none>
+
+# the Service got a virtual IP; its endpoints are the 3 pod IPs, maintained automatically
+$ kubectl get svc web-service-clusterip
+NAME                    TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+web-service-clusterip   ClusterIP   10.106.26.249   <none>        8080/TCP   1s
+
+$ kubectl get endpointslice -l kubernetes.io/service-name=web-service-clusterip -o custom-columns='SLICE:.metadata.name,PORTS:.ports[*].port,ENDPOINTS:.endpoints[*].addresses'
+SLICE                         PORTS   ENDPOINTS
+web-service-clusterip-mghrp   80      [10.244.1.64],[10.244.0.26],[10.244.1.65]
+
+$ kubectl apply -f session-11-kubernetes-services/01-clusterip/client-pod.yaml
+pod/curl-client created
+
+$ kubectl wait --for=condition=ready pod/curl-client --timeout=180s
+pod/curl-client condition met
+
+# ===== reach the service by short name, by FQDN, and by raw ClusterIP =====
+$ kubectl exec curl-client -- curl -s http://web-service-clusterip:8080 | grep -i '<title>'
+<title>Welcome to nginx!</title>
+
+$ kubectl exec curl-client -- curl -s http://web-service-clusterip.default.svc.cluster.local:8080 | grep -i '<title>'
+<title>Welcome to nginx!</title>
+
+$ kubectl exec curl-client -- curl -s http://10.106.26.249:8080 | grep -i '<title>'
+<title>Welcome to nginx!</title>
+
+# NOTE: port 8080 is the SERVICE port; the pods themselves listen on 80 (targetPort).

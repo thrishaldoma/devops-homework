@@ -1,0 +1,26 @@
+$ kubectl get nodes
+NAME           STATUS   ROLES           AGE   VERSION
+minikube       Ready    control-plane   23m   v1.37.0
+minikube-m02   Ready    <none>          23m   v1.37.0
+
+# a DaemonSet schedules exactly ONE pod per eligible node - no replica count is specified
+$ kubectl apply -f session10-k8s-core-objects/k8s-core-objects/deamonset.yml
+daemonset.apps/node-exporter created
+
+$ kubectl get ds node-exporter
+NAME            DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR   AGE
+node-exporter   2         2         2       2            2           <none>          25s
+
+$ kubectl get pods -l app=node-exporter -o wide
+NAME                  READY   STATUS    RESTARTS   AGE   IP            NODE           NOMINATED NODE   READINESS GATES
+node-exporter-46q2x   1/1     Running   0          25s   10.244.0.6    minikube       <none>           <none>
+node-exporter-7vxwm   1/1     Running   0          25s   10.244.1.23   minikube-m02   <none>           <none>
+
+# DESIRED matches the node count (2). The control-plane toleration lets it run on the master too.
+$ kubectl get pods -l app=node-exporter -o custom-columns='POD:.metadata.name,NODE:.spec.nodeName' --no-headers | sort -k2
+node-exporter-46q2x   minikube
+node-exporter-7vxwm   minikube-m02
+
+$ kubectl delete -f session10-k8s-core-objects/k8s-core-objects/deamonset.yml --wait=false
+daemonset.apps "node-exporter" deleted from default namespace
+

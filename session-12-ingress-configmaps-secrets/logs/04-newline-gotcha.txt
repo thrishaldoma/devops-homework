@@ -1,0 +1,40 @@
+# ===== THE BUG: plain 'echo' appends a newline (0x0a) to the password =====
+$ echo 'secretpassword' | xxd
+00000000: 7365 6372 6574 7061 7373 776f 7264 0a    secretpassword.
+
+$ echo 'secretpassword' | base64
+c2VjcmV0cGFzc3dvcmQK
+
+# note the trailing '0a' byte above, and that the base64 ends in 'K'.
+# 
+# ===== THE FIX: 'echo -n' emits the exact byte stream =====
+$ echo -n 'secretpassword' | xxd
+00000000: 7365 6372 6574 7061 7373 776f 7264       secretpassword
+
+$ echo -n 'secretpassword' | base64
+c2VjcmV0cGFzc3dvcmQ=
+
+# no 0a byte; the base64 ends in '=' padding instead.
+# 
+$ echo "Wrong (with newline): $(echo 'secretpassword' | base64)"
+Wrong (with newline): c2VjcmV0cGFzc3dvcmQK
+
+$ echo "Right (no newline):   $(echo -n 'secretpassword' | base64)"
+Right (no newline):   c2VjcmV0cGFzc3dvcmQ=
+
+# 
+# ===== why it breaks authentication =====
+$ echo 'c2VjcmV0cGFzc3dvcmQK' | base64 --decode | wc -c | xargs echo 'wrong  -> byte length:'
+wrong  -> byte length: 15
+
+$ echo 'c2VjcmV0cGFzc3dvcmQ=' | base64 --decode | wc -c | xargs echo 'right  -> byte length:'
+right  -> byte length: 14
+
+# The database receives 'secretpassword\n' (15 bytes) instead of 'secretpassword'
+# (14 bytes) and rejects the login. The newline is invisible in every log and UI,
+# which is what makes this bug so hard to spot.
+# 
+# Our committed secret uses the correct 14-byte value:
+$ kubectl get secret yatri-db-secret -o jsonpath='{.data.POSTGRES_PASSWORD}' && echo ''
+c2VjcmV0cGFzc3dvcmQ=
+

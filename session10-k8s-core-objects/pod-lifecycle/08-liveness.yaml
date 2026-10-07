@@ -1,0 +1,18 @@
+# Liveness probe - self-healing. /tmp/healthy is removed after 30s, the probe
+# then fails 3 times in a row and the kubelet restarts the container,
+# incrementing RESTARTS.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lifecycle-liveness
+spec:
+  containers:
+    - name: app
+      image: busybox:1.36
+      command: ["/bin/sh", "-c", "touch /tmp/healthy; echo 'healthy'; sleep 30; rm -f /tmp/healthy; echo 'now unhealthy'; sleep 600"]
+      livenessProbe:
+        exec:
+          command: ["cat", "/tmp/healthy"]
+        initialDelaySeconds: 5
+        periodSeconds: 5
+        failureThreshold: 3

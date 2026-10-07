@@ -1,0 +1,56 @@
+==============================================
+        SYSTEM INFORMATION SCRIPT
+==============================================
+
+
+----------------------------------------------
+ SUBMITTED BY
+----------------------------------------------
+Name          : THRISHAL DOMA
+Enrollment No : 24BCS10097
+
+----------------------------------------------
+ SYSTEM DETAILS
+----------------------------------------------
+Current Date  : Friday, 04 September 2026 - 17:17:13
+Hostname      : 4f1eb9c1623d
+Username      : root
+Kernel        : 7.0.12-linuxkit
+
+----------------------------------------------
+ DISK USAGE (df -h)
+----------------------------------------------
+Filesystem      Size  Used Avail Use% Mounted on
+overlay         911G  4.2G  861G   1% /
+tmpfs            64M     0   64M   0% /dev
+shm              64M     0   64M   0% /dev/shm
+tmpfs           3.9G   32K  3.9G   1% /run
+tmpfs           3.9G     0  3.9G   0% /run/lock
+/dev/vda1       911G  4.2G  861G   1% /etc/hosts
+
+----------------------------------------------
+ RUNNING PROCESSES (first 10)
+----------------------------------------------
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root           1  0.0  0.1  18704  9700 ?        Ss   17:10   0:00 /sbin/init
+root          23  0.0  0.1  48084 14340 ?        S<s  17:10   0:00 /lib/systemd/systemd-journald
+message+     343  0.0  0.0   7764  3752 ?        Ss   17:12   0:00 @dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only
+root         345  0.0  0.0  15300  6848 ?        Ss   17:12   0:00 /lib/systemd/systemd-logind
+root         715  0.0  0.0  55076  2288 ?        Ss   17:12   0:00 nginx: master process /usr/sbin/nginx -g daemon on; master_process on;
+www-data     716  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     717  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     718  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     719  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+www-data     720  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+
+[+] Directory created : system-report
+[+] File created      : system-report/process.log
+
+[+] Running processes saved to  : system-report/process.log
+[+] Disk usage saved to         : system-report/disk-usage.log
+[+] Lines written to process.log: 29
+
+==============================================
+ Script completed successfully.
+==============================================
+

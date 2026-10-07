@@ -1,0 +1,9 @@
+# ExternalName has NO selector, NO endpoints and NO cluster IP.
+# CoreDNS simply returns a CNAME to the external domain.
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-database-service
+spec:
+  type: ExternalName
+  externalName: api.github.com

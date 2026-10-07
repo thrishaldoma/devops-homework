@@ -1,0 +1,34 @@
+# campus-ingress-tls combines HOST-based routing and PATH-based routing in one object.
+$ kubectl describe ingress campus-ingress-tls
+Name:             campus-ingress-tls
+Labels:           app=yatri-app
+Namespace:        default
+Address:          192.168.49.2
+Ingress Class:    nginx
+Default backend:  <default>
+TLS:
+  campus-tls-cert terminates portal.campus.local,api.campus.local
+Rules:
+  Host                 Path  Backends
+  ----                 ----  --------
+  portal.campus.local  
+                       /   yatri-frontend-service:80 (10.244.0.32:80,10.244.1.76:80)
+  api.campus.local     
+                       /api(/|$)(.*)   yatri-backend-service:8080 (10.244.1.78:8080,10.244.0.34:8080)
+                       /               yatri-backend-service:8080 (10.244.1.78:8080,10.244.0.34:8080)
+Annotations:           nginx.ingress.kubernetes.io/rewrite-target: /$2
+Events:
+  Type    Reason  Age                From                      Message
+  ----    ------  ----               ----                      -------
+  Normal  Sync    52s (x2 over 68s)  nginx-ingress-controller  Scheduled for sync
+
+# ===== proving each host+path combination lands where intended =====
+$ curl -sk -o /dev/null -w 'portal.campus.local/         -> HTTP %{http_code}\n' --resolve portal.campus.local:18443:127.0.0.1 https://portal.campus.local:18443/
+portal.campus.local/         -> HTTP 200
+
+$ curl -sk --resolve api.campus.local:18443:127.0.0.1 https://api.campus.local:18443/api/health | grep '^path:' | sed 's/^/api.campus.local\/api\/health  -> backend saw /'
+api.campus.local/api/health  -> backend saw path: /health
+
+$ curl -sk --resolve api.campus.local:18443:127.0.0.1 https://api.campus.local:18443/ | grep '^path:' | sed 's/^/api.campus.local\/            -> backend saw /'
+api.campus.local/            -> backend saw path: /
+

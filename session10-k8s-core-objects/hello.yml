@@ -1,0 +1,16 @@
+# Task 4 - short-lived batch Pod. restartPolicy: Never lets the Pod settle in
+# Succeeded/Completed instead of being restarted forever.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hello-pod
+  labels:
+    app: hello
+spec:
+  restartPolicy: Never
+  containers:
+    - name: hello
+      image: busybox:1.36
+      command: ["/bin/sh", "-c"]
+      args:
+        - echo "Hello from Kubernetes"; sleep 10; echo "Batch work finished"

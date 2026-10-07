@@ -1,0 +1,8 @@
+=== BASELINE captured Fri Sep  4 22:34:10 IST 2026 - resources existing BEFORE this run ===
+--- containers ---
+--- images ---
+--- networks ---
+bridge
+host
+none
+--- volumes ---

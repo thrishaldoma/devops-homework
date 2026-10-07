@@ -1,0 +1,29 @@
+$ minikube addons enable ingress 2>&1 | tail -3
+  - Using image registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.6.9
+* Verifying ingress addon...
+* The 'ingress' addon is enabled
+
+# the controller runs as a real workload in its own namespace:
+$ kubectl get pods -n ingress-nginx -o wide
+NAME                                       READY   STATUS      RESTARTS      AGE   IP           NODE       NOMINATED NODE   READINESS GATES
+ingress-nginx-admission-create-vldwt       0/1     Completed   0             47m   <none>       minikube   <none>           <none>
+ingress-nginx-admission-patch-w9qlj        0/1     Completed   0             47m   <none>       minikube   <none>           <none>
+ingress-nginx-controller-d7cd8c989-dgdc8   1/1     Running     1 (41m ago)   47m   10.244.0.3   minikube   <none>           <none>
+
+$ kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=180s
+pod/ingress-nginx-controller-d7cd8c989-dgdc8 condition met
+
+$ kubectl get service -n ingress-nginx
+NAME                                 TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)                      AGE
+ingress-nginx-controller             NodePort    10.100.177.195   <none>        80:31303/TCP,443:32568/TCP   47m
+ingress-nginx-controller-admission   ClusterIP   10.101.43.184    <none>        443/TCP                      47m
+
+# it also registers a validating webhook and an IngressClass:
+$ kubectl get ingressclass
+NAME              CONTROLLER             PARAMETERS   AGE
+nginx (default)   k8s.io/ingress-nginx   <none>       47m
+
+$ kubectl api-resources | grep -i ingress
+ingressclasses                                   networking.k8s.io/v1              false        IngressClass
+ingresses                           ing          networking.k8s.io/v1              true         Ingress
+

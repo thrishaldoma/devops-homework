@@ -5,6 +5,7 @@ FROM python:3.12-slim AS builder
 WORKDIR /src
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+COPY pytest.ini .
 COPY app/ ./app/
 COPY tests/ ./tests/
 RUN PYTHONPATH=/install/lib/python3.12/site-packages python -m pytest -q

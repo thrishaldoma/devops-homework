@@ -1,0 +1,56 @@
+# WHY <node-ip>:<nodePort> FAILS ON macOS WITH THE DOCKER DRIVER
+# minikube's 'node' is a Docker container on an internal bridge network.
+$ minikube ip
+192.168.49.2
+
+$ docker network inspect minikube --format '{{range .IPAM.Config}}subnet: {{.Subnet}} gateway: {{.Gateway}}{{end}}'
+subnet: 192.168.49.0/24 gateway: 192.168.49.1
+
+$ docker ps --filter name=minikube --format 'table {{.Names}}\t{{.Ports}}'
+NAMES          PORTS
+minikube-m02   127.0.0.1:52459->22/tcp, 127.0.0.1:52460->2376/tcp, 127.0.0.1:52461->5000/tcp, 127.0.0.1:52462->8443/tcp, 127.0.0.1:52463->32443/tcp
+minikube       127.0.0.1:52419->22/tcp, 127.0.0.1:52415->2376/tcp, 127.0.0.1:52417->5000/tcp, 127.0.0.1:52418->8443/tcp, 127.0.0.1:52416->32443/tcp
+
+# On Linux the host shares the kernel with that bridge and can route to it.
+# On macOS, Docker Desktop runs the engine inside its own VM, so 192.168.49.0/24
+# exists only inside that VM. The macOS TCP/IP stack has no route to it.
+$ netstat -rn -f inet 2>/dev/null | grep -c '192.168.49' | xargs echo 'host routes to 192.168.49.0/24:'
+host routes to 192.168.49.0/24: 0
+
+# 
+# PROOF - the same port, from inside the cluster vs from the macOS host:
+$ kubectl exec curl-client -- curl -s -o /dev/null -w 'IN-CLUSTER  192.168.49.2:30080 -> HTTP %{http_code}\n' --max-time 5 http://192.168.49.2:30080
+IN-CLUSTER  192.168.49.2:30080 -> HTTP 200
+
+$ curl -s -o /dev/null --connect-timeout 3 -w 'FROM HOST   192.168.49.2:30080 -> HTTP %{http_code}\n' http://192.168.49.2:30080 || echo 'FROM HOST   192.168.49.2:30080 -> no route / connection failed'
+FROM HOST   192.168.49.2:30080 -> HTTP 000
+FROM HOST   192.168.49.2:30080 -> no route / connection failed
+
+# 
+# Note the 'docker ps' output above: only 127.0.0.1 mappings for ssh/apiserver.
+# NodePort 30080 is NOT published to the host, so nothing on macOS can reach it.
+# 
+# ===== WORKAROUND 1: minikube service --url (no root needed) =====
+$ minikube service web-service-nodeport --url
+http://127.0.0.1:54465
+
+$ curl -s -o /dev/null -w 'FROM HOST   http://127.0.0.1:54465 -> HTTP %{http_code}\n' --max-time 10 http://127.0.0.1:54465
+FROM HOST   http://127.0.0.1:54465 -> HTTP 200
+
+# minikube opens an ephemeral loopback listener and proxies it into the docker network.
+# 
+# ===== WORKAROUND 2: kubectl port-forward (no root needed) =====
+$ curl -s -o /dev/null -w 'FROM HOST   127.0.0.1:18081 -> HTTP %{http_code}\n' --max-time 10 http://127.0.0.1:18081
+FROM HOST   127.0.0.1:18081 -> HTTP 200
+
+# port-forward tunnels over the Kubernetes API connection, bypassing node networking
+# entirely. Caveat: it targets ONE pod, so it does not load-balance.
+# 
+# ===== WORKAROUND 3: minikube tunnel (the documented fix) =====
+# 'minikube tunnel' creates host routes to the cluster and binds privileged ports,
+# which requires root. Passwordless sudo is unavailable in this environment, so it
+# could not be executed here; workarounds 1 and 2 were used instead.
+$ kubectl delete -f session-11-kubernetes-services/02-nodeport/service.yaml -f session-11-kubernetes-services/02-nodeport/app-deployment.yaml --wait=false
+service "web-service-nodeport" deleted from default namespace
+deployment.apps "web-app-nodeport" deleted from default namespace
+

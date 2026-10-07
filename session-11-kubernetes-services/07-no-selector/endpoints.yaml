@@ -1,0 +1,15 @@
+# Manually-managed EndpointSlice pointing at an external IP.
+# (EndpointSlice is the modern replacement for the deprecated Endpoints API.)
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: external-legacy-db-manual
+  labels:
+    kubernetes.io/service-name: external-legacy-db
+addressType: IPv4
+ports:
+  - port: 3306
+    protocol: TCP
+endpoints:
+  - addresses:
+      - 192.168.1.150

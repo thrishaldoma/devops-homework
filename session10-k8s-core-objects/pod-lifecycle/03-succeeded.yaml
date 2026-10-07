@@ -1,0 +1,12 @@
+# Phase: Succeeded - container exits 0 and restartPolicy: Never stops K8s
+# from restarting it, so the pod stays as Completed.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lifecycle-succeeded
+spec:
+  restartPolicy: Never
+  containers:
+    - name: worker
+      image: busybox:1.36
+      command: ["/bin/sh", "-c", "echo 'job done'; exit 0"]

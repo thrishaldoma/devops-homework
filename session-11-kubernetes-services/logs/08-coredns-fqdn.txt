@@ -1,0 +1,67 @@
+$ kubectl get pods -n kube-system -l k8s-app=kube-dns -o wide
+NAME                       READY   STATUS    RESTARTS      AGE   IP           NODE       NOMINATED NODE   READINESS GATES
+coredns-559f6c778d-vvz5s   1/1     Running   1 (35m ago)   41m   10.244.0.2   minikube   <none>           <none>
+
+$ kubectl get svc -n kube-system kube-dns
+NAME       TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)                  AGE
+kube-dns   ClusterIP   10.96.0.10   <none>        53/UDP,53/TCP,9153/TCP   41m
+
+# ===== /etc/resolv.conf injected into every pod by the kubelet =====
+$ kubectl exec curl-client -- cat /etc/resolv.conf
+search default.svc.cluster.local svc.cluster.local cluster.local
+nameserver 10.96.0.10
+options ndots:5
+
+# search = suffixes tried for short names; ndots:5 = any name with FEWER than 5
+# dots is treated as relative and gets each suffix appended before being tried absolute.
+# 
+# ===== short name resolves via the search path =====
+$ kubectl exec curl-client -- nslookup web-service-clusterip 2>&1 | grep -A 3 'Name:'
+Name:	web-service-clusterip.default.svc.cluster.local
+Address: 10.106.26.249
+
+** server can't find web-service-clusterip.cluster.local: NXDOMAIN
+
+# ===== full FQDN resolves directly =====
+$ kubectl exec curl-client -- nslookup web-service-clusterip.default.svc.cluster.local 2>&1 | grep -A 3 'Name:'
+Name:	web-service-clusterip.default.svc.cluster.local
+Address: 10.106.26.249
+
+
+# 
+# ===== the ndots:5 cost for EXTERNAL names =====
+# 'api.github.com' has 2 dots (< 5), so it is tried as a relative name first:
+#   api.github.com.default.svc.cluster.local  -> NXDOMAIN
+#   api.github.com.svc.cluster.local          -> NXDOMAIN
+#   api.github.com.cluster.local              -> NXDOMAIN
+#   api.github.com                            -> finally answered
+$ kubectl exec curl-client -- nslookup api.github.com 2>&1 | head -12
+Server:		10.96.0.10
+Address:	10.96.0.10:53
+
+Non-authoritative answer:
+
+Non-authoritative answer:
+Name:	api.github.com
+Address: 20.207.73.85
+
+
+# The extra lookups are visible directly in the ExternalName test (05-externalname.txt),
+# where nslookup printed 4 NXDOMAIN lines before the answer.
+# 
+# Measuring the cost: 50 lookups of the relative name vs 50 of the absolute name.
+$ time -p sh -c 'i=0; while [ $i -lt 50 ]; do nslookup api.github.com  >/dev/null; i=$((i+1)); done'
+real 0.02
+user 0.01
+sys 0.00
+
+$ time -p sh -c 'i=0; while [ $i -lt 50 ]; do nslookup api.github.com. >/dev/null; i=$((i+1)); done'   # trailing dot
+real 0.01
+user 0.00
+sys 0.00
+
+# ~2x slower for the relative form. The absolute numbers are tiny here because
+# CoreDNS is one hop away on an idle 2-node lab cluster and caches aggressively.
+# PRODUCTION IMPACT: each external call can cost up to 4 wasted DNS round-trips
+# before the real one. At scale that adds latency and floods CoreDNS. Standard
+# fixes: a trailing dot, a per-pod dnsConfig with ndots:1, or NodeLocal DNSCache.

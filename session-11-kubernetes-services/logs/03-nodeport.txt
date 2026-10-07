@@ -1,0 +1,44 @@
+$ kubectl apply -f session-11-kubernetes-services/02-nodeport/app-deployment.yaml -f session-11-kubernetes-services/02-nodeport/service.yaml
+deployment.apps/web-app-nodeport created
+service/web-service-nodeport created
+
+$ kubectl rollout status deployment/web-app-nodeport --timeout=240s
+Waiting for deployment "web-app-nodeport" rollout to finish: 0 of 2 updated replicas are available...
+Waiting for deployment "web-app-nodeport" rollout to finish: 1 of 2 updated replicas are available...
+deployment "web-app-nodeport" successfully rolled out
+
+# PORT(S) reads 80:30080/TCP  =  <service port>:<nodePort>
+$ kubectl get svc web-service-nodeport
+NAME                   TYPE       CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+web-service-nodeport   NodePort   10.107.181.107   <none>        80:30080/TCP   0s
+
+$ kubectl get pods -l app=web-nodeport -o wide
+NAME                                READY   STATUS    RESTARTS   AGE   IP            NODE           NOMINATED NODE   READINESS GATES
+web-app-nodeport-8685bf87bc-6hq6k   1/1     Running   0          0s    10.244.1.67   minikube-m02   <none>           <none>
+web-app-nodeport-8685bf87bc-pdfz6   1/1     Running   0          0s    10.244.0.27   minikube       <none>           <none>
+
+# the nodePort is open on EVERY node, including one that is not running a pod
+# of this app - kube-proxy forwards across nodes. Proof from inside the cluster:
+# (allow a few seconds first: kube-proxy must program iptables on each node)
+$ kubectl exec curl-client -- curl -s -o /dev/null -w 'node 192.168.49.2:30080 -> HTTP %{http_code}\n' --max-time 5 http://192.168.49.2:30080
+node 192.168.49.2:30080 -> HTTP 200
+
+$ kubectl exec curl-client -- curl -s -o /dev/null -w 'node 192.168.49.3:30080 -> HTTP %{http_code}\n' --max-time 5 http://192.168.49.3:30080
+node 192.168.49.3:30080 -> HTTP 200
+
+# ===== reaching the NodePort from the macOS HOST =====
+# Direct access to the node IP does not work with the Docker driver (see Task 12):
+$ curl --connect-timeout 3 -s -o /dev/null -w 'host -> 192.168.49.2:30080 = HTTP %{http_code}\n' http://192.168.49.2:30080 || echo 'host -> 192.168.49.2:30080 = FAILED (unreachable)'
+host -> 192.168.49.2:30080 = HTTP 000
+host -> 192.168.49.2:30080 = FAILED (unreachable)
+
+# Workaround: minikube service --url opens a loopback tunnel into the docker network.
+$ minikube service web-service-nodeport --url
+http://127.0.0.1:54290
+
+$ curl -s -o /dev/null -w 'host -> http://127.0.0.1:54290 = HTTP %{http_code}\n' --max-time 10 http://127.0.0.1:54290
+host -> http://127.0.0.1:54290 = HTTP 200
+
+$ curl -s --max-time 10 http://127.0.0.1:54290 | grep -i '<title>'
+<title>Welcome to nginx!</title>
+

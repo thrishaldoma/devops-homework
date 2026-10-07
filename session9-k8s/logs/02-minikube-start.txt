@@ -1,0 +1,36 @@
+$ minikube start 2>&1 | tr '\r' '\n' | grep -vE '^[[:space:]]*>' | grep -v '^[[:space:]]*$'
+* minikube v1.39.0 on Darwin 26.6.2 (arm64)
+* Using the docker driver based on existing profile
+* Starting "minikube" primary control-plane node in "minikube" cluster
+* Pulling base image v0.0.51 ...
+* Preparing Kubernetes v1.37.0 on containerd 2.3.4 ...
+* Verifying Kubernetes components...
+* After the addon is enabled, please run "minikube tunnel" and your ingress resources would be available at "127.0.0.1"
+  - Using image registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.6.9
+  - Using image registry.k8s.io/ingress-nginx/controller:v1.15.1
+  - Using image registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.6.9
+* Verifying ingress addon...
+* Enabled addons: ingress
+* Starting "minikube-m02" worker node in "minikube" cluster
+* Pulling base image v0.0.51 ...
+* Found network options:
+  - NO_PROXY=192.168.49.2
+* Preparing Kubernetes v1.37.0 on containerd 2.3.4 ...
+  - env NO_PROXY=192.168.49.2
+* Verifying Kubernetes components...
+* Done! kubectl is now configured to use "minikube" cluster and "default" namespace by default
+
+$ minikube status
+minikube
+type: Control Plane
+host: Running
+kubelet: Running
+apiserver: Running
+kubeconfig: Configured
+
+minikube-m02
+type: Worker
+host: Running
+kubelet: Running
+
+

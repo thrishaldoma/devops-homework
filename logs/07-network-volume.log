@@ -1,0 +1,378 @@
+
+$ docker network create frontend-net
+938608324f0c0ce1cb9dfb8d388bea5f38d470f8d4600a79a32e9a1cbd965e3d
+[exit: 0]
+
+$ docker network create backend-net
+f2ed42fbb91c1525db844a6e0db893318ebbfe94609def5726c0755e0646572b
+[exit: 0]
+
+$ docker network create db-net
+9f577d9523f9ddd06a006562947e40c5e78c22f9a83340d0018553099fe5ef58
+[exit: 0]
+
+$ docker network ls
+NETWORK ID     NAME           DRIVER    SCOPE
+f2ed42fbb91c   backend-net    bridge    local
+c2be6c3374ec   bridge         bridge    local
+9f577d9523f9   db-net         bridge    local
+938608324f0c   frontend-net   bridge    local
+8da6b07fd132   host           host      local
+826e9c36714c   none           null      local
+[exit: 0]
+
+$ docker network inspect frontend-net --format 'name={{.Name}} driver={{.Driver}} subnet={{range .IPAM.Config}}{{.Subnet}}{{end}}'
+name=frontend-net driver=bridge subnet=172.18.0.0/16
+[exit: 0]
+
+$ docker run -d --name frontend --network frontend-net alpine:latest sleep infinity
+258639d4970216bbd565dafd56bdb5084615db223a499596e23bfcc1600f4425
+[exit: 0]
+
+$ docker run -d --name backend --network frontend-net alpine:latest sleep infinity
+c2d3fe4e9fc7ab1653196effbdec7ce53189d877bf46c6a119f9a24bb31daff8
+[exit: 0]
+
+$ docker network connect backend-net backend
+[exit: 0]
+
+$ docker run -d --name database --network backend-net -e MYSQL_ROOT_PASSWORD=root123 -e MYSQL_DATABASE=testdb mysql:8.0
+a5fa527b5698413939ea2629e90c1ef77de2042bd83b72e262873f3ec3597173
+[exit: 0]
+
+$ docker network connect db-net database
+[exit: 0]
+
+$ docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}' | grep -E 'NAMES|frontend|backend|database'
+NAMES            IMAGE                 STATUS
+database         mysql:8.0             Up 30 seconds
+backend          alpine:latest         Up 30 seconds
+frontend         alpine:latest         Up 30 seconds
+[exit: 0]
+
+$ docker logs database 2>&1 | tail -5
+2026-09-04T17:34:44.303191Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-09-04T17:34:44.303209Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-09-04T17:34:44.304021Z 0 [Warning] [MY-011810] [Server] Insecure configuration for --pid-file: Location '/var/run/mysqld' in the path is accessible to all OS users. Consider choosing a different directory.
+2026-09-04T17:34:44.308464Z 0 [System] [MY-011323] [Server] X Plugin ready for connections. Bind-address: '::' port: 33060, socket: /var/run/mysqld/mysqlx.sock
+2026-09-04T17:34:44.308531Z 0 [System] [MY-010931] [Server] /usr/sbin/mysqld: ready for connections. Version: '8.0.46'  socket: '/var/run/mysqld/mysqld.sock'  port: 3306  MySQL Community Server - GPL.
+[exit: 0]
+
+$ docker inspect backend --format '{{range $n,$c := .NetworkSettings.Networks}}{{$n}} -> {{$c.IPAddress}}{{"\n"}}{{end}}'
+backend-net -> 172.19.0.2
+frontend-net -> 172.18.0.3
+
+[exit: 0]
+
+$ printf '%-14s : ' frontend-net; docker network inspect frontend-net --format '{{range .Containers}}{{.Name}} {{end}}'
+frontend-net   : frontend backend 
+[exit: 0]
+
+$ printf '%-14s : ' backend-net; docker network inspect backend-net --format '{{range .Containers}}{{.Name}} {{end}}'
+backend-net    : database backend 
+[exit: 0]
+
+$ printf '%-14s : ' db-net; docker network inspect db-net --format '{{range .Containers}}{{.Name}} {{end}}'
+db-net         : database 
+[exit: 0]
+
+$ docker exec frontend apk add --no-cache iputils bind-tools netcat-openbsd >/dev/null && echo 'frontend ready'
+frontend ready
+[exit: 0]
+
+$ docker exec backend apk add --no-cache iputils bind-tools netcat-openbsd >/dev/null && echo 'backend ready'
+backend ready
+[exit: 0]
+############ TEST 1: frontend -> backend (same network, must SUCCEED) ############
+
+$ docker exec frontend ping -c 3 backend
+PING backend (172.18.0.3) 56(84) bytes of data.
+64 bytes from backend.frontend-net (172.18.0.3): icmp_seq=1 ttl=64 time=0.125 ms
+64 bytes from backend.frontend-net (172.18.0.3): icmp_seq=2 ttl=64 time=0.212 ms
+64 bytes from backend.frontend-net (172.18.0.3): icmp_seq=3 ttl=64 time=0.095 ms
+
+--- backend ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2060ms
+rtt min/avg/max/mdev = 0.095/0.144/0.212/0.049 ms
+[exit: 0]
+############ TEST 2: backend -> database (same network, must SUCCEED) ############
+
+$ docker exec backend ping -c 3 database
+PING database (172.19.0.3) 56(84) bytes of data.
+64 bytes from database.backend-net (172.19.0.3): icmp_seq=1 ttl=64 time=0.139 ms
+64 bytes from database.backend-net (172.19.0.3): icmp_seq=2 ttl=64 time=0.150 ms
+64 bytes from database.backend-net (172.19.0.3): icmp_seq=3 ttl=64 time=0.112 ms
+
+--- database ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2030ms
+rtt min/avg/max/mdev = 0.112/0.133/0.150/0.015 ms
+[exit: 0]
+
+$ docker exec backend nc -zv database 3306
+Connection to database (172.19.0.3) 3306 port [tcp/mysql] succeeded!
+[exit: 0]
+
+$ docker exec backend nslookup database
+Server:		127.0.0.11
+Address:	127.0.0.11#53
+
+Non-authoritative answer:
+Name:	database
+Address: 172.19.0.3
+
+[exit: 0]
+############ TEST 3: frontend -> database (NO shared network, must FAIL) ############
+
+$ docker exec frontend ping -c 2 database
+ping: database: Name does not resolve
+[exit: 2]
+
+$ docker exec frontend nslookup database
+Server:		127.0.0.11
+Address:	127.0.0.11#53
+
+** server can't find database: NXDOMAIN
+
+[exit: 1]
+############ TEST 4: connect -> works, disconnect -> fails again ############
+
+$ docker network connect db-net frontend
+[exit: 0]
+
+$ docker exec frontend ping -c 2 database
+PING database (172.20.0.2) 56(84) bytes of data.
+64 bytes from database.db-net (172.20.0.2): icmp_seq=1 ttl=64 time=0.073 ms
+64 bytes from database.db-net (172.20.0.2): icmp_seq=2 ttl=64 time=0.192 ms
+
+--- database ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1006ms
+rtt min/avg/max/mdev = 0.073/0.132/0.192/0.059 ms
+[exit: 0]
+
+$ docker network disconnect db-net frontend
+[exit: 0]
+
+$ docker exec frontend ping -c 2 database
+ping: database: Name does not resolve
+[exit: 2]
+############ TASK 2 : HOST NETWORK ############
+
+$ docker run -d --name apache-host --network host httpd:2.4
+4c67db6fe5739493ad6a5cc94638a07f81107caa372f3f0a5902e0e77879ae34
+[exit: 0]
+
+$ docker ps --filter name=apache-host --format 'table {{.Names}}\t{{.Image}}\t{{.Ports}}'
+NAMES         IMAGE       PORTS
+apache-host   httpd:2.4   
+[exit: 0]
+
+$ docker logs apache-host 2>&1 | tail -4
+AH00558: httpd: Could not reliably determine the server's fully qualified domain name, using 192.168.65.3. Set the 'ServerName' directive globally to suppress this message
+AH00558: httpd: Could not reliably determine the server's fully qualified domain name, using 192.168.65.3. Set the 'ServerName' directive globally to suppress this message
+[Fri Sep 04 17:36:08.682357 2026] [mpm_event:notice] [pid 1:tid 1] AH00489: Apache/2.4.68 (Unix) configured -- resuming normal operations
+[Fri Sep 04 17:36:08.682718 2026] [core:notice] [pid 1:tid 1] AH00094: Command line: 'httpd -D FOREGROUND'
+[exit: 0]
+
+$ docker run --rm --network host alpine:latest sh -c 'apk add --no-cache curl >/dev/null && curl -si http://localhost:80 | head -8'
+HTTP/1.1 200 OK
+Date: Fri, 04 Sep 2026 17:36:19 GMT
+Server: Apache/2.4.68 (Unix)
+Last-Modified: Fri, 07 Nov 2025 08:23:08 GMT
+ETag: "bf-642fce432f300"
+Accept-Ranges: bytes
+Content-Length: 191
+Content-Type: text/html
+[exit: 0]
+
+$ docker run --rm --network host alpine:latest sh -c 'apk add --no-cache iproute2 >/dev/null && ss -tulnp | grep ":80 "'
+tcp   LISTEN 0      511                *:80               *:*   
+[exit: 0]
+
+$ docker cp /tmp/host-index.html apache-host:/usr/local/apache2/htdocs/index.html
+[exit: 0]
+
+$ docker run --rm --network host alpine:latest sh -c 'apk add --no-cache curl >/dev/null && curl -s http://localhost:80'
+<h1>Hello from Apache on the HOST network (port 80)</h1>
+[exit: 0]
+
+$ curl -si --max-time 8 http://localhost:80 | head -5 || echo 'not reachable from macOS host (expected on Docker Desktop)'
+[exit: 0]
+############ TASK 3 : BIND MOUNT ############
+
+$ cat html/index.html
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Bind Mount Demo</title></head>
+<body style="font-family:sans-serif;text-align:center;padding-top:60px">
+  <h1>Hello students</h1>
+</body></html>
+[exit: 0]
+
+$ pwd
+/Users/thrishaldoma/devops-homework/07-docker-network-volume/bind-mount-demo
+[exit: 0]
+
+$ docker run -d --name nginx-bind -p 8090:80 -v '/Users/thrishaldoma/devops-homework/07-docker-network-volume/bind-mount-demo/html':/usr/share/nginx/html:ro nginx:alpine
+fc332b1e582d7ed521e7b19fb58d3374946f40e77ba3a2383ae716c1774996d0
+[exit: 0]
+
+$ docker exec nginx-bind cat /usr/share/nginx/html/index.html
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Bind Mount Demo</title></head>
+<body style="font-family:sans-serif;text-align:center;padding-top:60px">
+  <h1>Hello students</h1>
+</body></html>
+[exit: 0]
+
+$ docker inspect nginx-bind --format '{{range .Mounts}}{{.Type}}  {{.Source}} -> {{.Destination}} (ro={{not .RW}}){{end}}'
+bind  /Users/thrishaldoma/devops-homework/07-docker-network-volume/bind-mount-demo/html -> /usr/share/nginx/html (ro=true)
+[exit: 0]
+
+$ curl -s http://localhost:8090
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Bind Mount Demo</title></head>
+<body style="font-family:sans-serif;text-align:center;padding-top:60px">
+  <h1>Hello students</h1>
+</body></html>
+[exit: 0]
+
+$ docker ps --filter name=nginx-bind --format '{{.Names}}: {{.Status}}'
+nginx-bind: Up 20 seconds
+[exit: 0]
+
+$ curl -s http://localhost:8090
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Bind Mount Demo - Updated</title></head>
+<body style="font-family:sans-serif;text-align:center;padding-top:60px">
+  <h1>Hello students - UPDATED without restarting the container!</h1>
+  <p>Edited on the macOS host at: 23:07:14</p>
+</body></html>
+[exit: 0]
+
+$ docker exec nginx-bind cat /usr/share/nginx/html/index.html
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Bind Mount Demo - Updated</title></head>
+<body style="font-family:sans-serif;text-align:center;padding-top:60px">
+  <h1>Hello students - UPDATED without restarting the container!</h1>
+  <p>Edited on the macOS host at: 23:07:14</p>
+</body></html>
+[exit: 0]
+
+$ docker ps --filter name=nginx-bind --format '{{.Names}}: {{.Status}}'
+nginx-bind: Up 20 seconds
+[exit: 0]
+
+$ docker ps --filter name=nginx-bind --format '{{.Names}}: {{.Status}}'
+nginx-bind: Up About a minute
+[exit: 0]
+
+$ curl -s http://localhost:8090 | grep -o 'Hello students[^<]*'
+Hello students - UPDATED without restarting the container!
+[exit: 0]
+
+$ docker inspect nginx-bind --format 'StartedAt={{.State.StartedAt}} RestartCount={{.RestartCount}}'
+StartedAt=2026-09-04T17:36:53.348588597Z RestartCount=0
+[exit: 0]
+############ NAMED VOLUME, FOR CONTRAST ############
+
+$ docker volume create site-data
+site-data
+[exit: 0]
+
+$ docker run -d --name nginx-vol -p 8091:80 -v site-data:/usr/share/nginx/html nginx:alpine
+e70565a6c67c92076519201ad6b1b86b83176e8555a87df2d1cf253af56a1d0d
+[exit: 0]
+
+$ docker exec nginx-vol sh -c 'echo "<h1>From a named volume</h1>" > /usr/share/nginx/html/index.html'
+[exit: 0]
+
+$ curl -s localhost:8091
+<h1>From a named volume</h1>
+[exit: 0]
+
+$ docker rm -f nginx-vol
+nginx-vol
+[exit: 0]
+
+$ docker run -d --name nginx-vol -p 8091:80 -v site-data:/usr/share/nginx/html nginx:alpine
+49c3020eaedde4421b9f2cca9805570d474e745c719465febf4b8974b17b87c2
+[exit: 0]
+
+$ curl -s localhost:8091
+<h1>From a named volume</h1>
+[exit: 0]
+
+$ docker volume inspect site-data --format '{{.Mountpoint}}'
+/var/lib/docker/volumes/site-data/_data
+[exit: 0]
+############ TASK 4 : OVERLAY NETWORK ############
+swarm state before: inactive
+
+$ docker swarm init
+Swarm initialized: current node (p4rzmokd19cu3gpk3cav5gt0w) is now a manager.
+
+To add a worker to this swarm, run the following command:
+
+    docker swarm join --token SWMTKN-1-5rr6g0mlvpdz86g4njspr6vkwugpei56koupux6q0zc6872sdz-620y9lys1jf3wyx83if0y0k8z 192.168.65.3:2377
+
+To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
+[exit: 0]
+
+$ docker network create -d overlay --attachable my-overlay
+2iljogw8n9p26nwa1uxn1vz31
+[exit: 0]
+
+$ docker network inspect my-overlay --format 'driver={{.Driver}} scope={{.Scope}} subnet={{range .IPAM.Config}}{{.Subnet}}{{end}}'
+driver=overlay scope=swarm subnet=10.0.1.0/24
+[exit: 0]
+
+$ docker run -d --name ov1 --network my-overlay alpine sleep infinity
+9e949bdc4060234ce472fba71544c458b077bb07903c7fb4a1567054195552f0
+[exit: 0]
+
+$ docker run -d --name ov2 --network my-overlay alpine sleep infinity
+961055df258b8574064747ca2c6d4f808d4b0c2900ad3826a2fa1dc35c6bf245
+[exit: 0]
+
+$ docker exec ov1 ping -c 3 ov2
+PING ov2 (10.0.1.4): 56 data bytes
+64 bytes from 10.0.1.4: seq=0 ttl=64 time=0.149 ms
+64 bytes from 10.0.1.4: seq=1 ttl=64 time=0.170 ms
+64 bytes from 10.0.1.4: seq=2 ttl=64 time=0.189 ms
+
+--- ov2 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 0.149/0.169/0.189 ms
+[exit: 0]
+
+$ docker network ls --filter driver=overlay
+NETWORK ID     NAME         DRIVER    SCOPE
+xdr5tievi523   ingress      overlay   swarm
+2iljogw8n9p2   my-overlay   overlay   swarm
+[exit: 0]
+
+$ docker rm -f ov1 ov2
+ov1
+ov2
+[exit: 0]
+
+$ docker network rm my-overlay
+my-overlay
+[exit: 0]
+
+$ docker swarm leave --force
+Node left the swarm.
+[exit: 0]
+
+$ docker info --format 'swarm state after cleanup: {{.Swarm.LocalNodeState}}'
+swarm state after cleanup: inactive
+[exit: 0]
+############ TEST 3 (repeat with BusyBox ping, for the exact 'bad address' form) ############
+
+$ docker exec frontend busybox ping -c 2 database
+ping: bad address 'database'
+[exit: 1]
+
+$ docker exec frontend sh -c 'which ping; ping -V 2>&1 | head -1'
+/bin/ping
+ping from iputils 20250605
+[exit: 0]

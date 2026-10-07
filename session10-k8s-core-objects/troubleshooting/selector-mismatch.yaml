@@ -1,0 +1,23 @@
+# Drill 2 - INVALID ON PURPOSE.
+# spec.selector.matchLabels (app: backend) does not match
+# spec.template.metadata.labels (app: frontend).
+# The API server rejects this at admission time: a Deployment's selector is
+# immutable and must match the pod template, otherwise the ReplicaSet it
+# creates could never own the pods it creates.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: selector-error-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend      # <-- selector says "backend"
+  template:
+    metadata:
+      labels:
+        app: frontend   # <-- template says "frontend"  => REJECTED
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.27-alpine

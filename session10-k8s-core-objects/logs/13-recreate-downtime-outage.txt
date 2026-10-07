@@ -1,0 +1,74 @@
+$ kubectl apply -f session10-k8s-core-objects/04-recreate/deployment-v1.yaml -f session10-k8s-core-objects/04-recreate/service.yaml
+deployment.apps/app-recreate created
+service/app-recreate-service created
+
+$ kubectl rollout status deployment/app-recreate --timeout=240s
+Waiting for deployment "app-recreate" rollout to finish: 0 of 3 updated replicas are available...
+Waiting for deployment "app-recreate" rollout to finish: 1 of 3 updated replicas are available...
+Waiting for deployment "app-recreate" rollout to finish: 2 of 3 updated replicas are available...
+deployment "app-recreate" successfully rolled out
+
+$ kubectl get pods -l app=app-recreate
+NAME                            READY   STATUS    RESTARTS   AGE
+app-recreate-669f7cdfcb-2nn6c   1/1     Running   0          0s
+app-recreate-669f7cdfcb-4dl5f   1/1     Running   0          0s
+app-recreate-669f7cdfcb-mf4vh   1/1     Running   0          0s
+
+# ===== continuous request loop running while we apply v2 (strategy: Recreate) =====
+$ while true; do curl -s --max-time 2 http://app-recreate-service || echo "[OUTAGE] connection refused"; sleep 0.5; done
+VERSION: v1
+   ... (x8 identical)
+[OUTAGE] connection refused / 0 pods alive
+   ... (x2 identical)
+VERSION: v2 (UPGRADED)
+   ... (x90 identical)
+
+$ kubectl get pods -l app=app-recreate
+NAME                            READY   STATUS    RESTARTS   AGE
+app-recreate-574b54944f-mfnlg   1/1     Running   0          49s
+app-recreate-574b54944f-nd4xj   1/1     Running   0          49s
+app-recreate-574b54944f-sw4bv   1/1     Running   0          49s
+
+# The 2 consecutive [OUTAGE] samples (~1s) are the deliberate gap: Recreate terminates
+# ALL v1 pods before creating any v2 pod. Compare with Task 8, where maxUnavailable:0
+# kept READY at 3 throughout and produced zero failed requests.
+$ kubectl rollout history deployment/app-recreate
+deployment.apps/app-recreate 
+REVISION  CHANGE-CAUSE
+1         <none>
+2         <none>
+
+
+# ===== rollback to v1 (Recreate again -> another deliberate outage) =====
+$ kubectl rollout undo deployment/app-recreate
+Warning: resource deployments/app-recreate was previously managed with 'kubectl apply'. Rolling back will not update the kubectl.kubernetes.io/last-applied-configuration annotation, which may cause unexpected behavior on future 'kubectl apply' operations. Consider using 'kubectl apply' with your previous configuration file instead.
+deployment.apps/app-recreate rolled back
+
+$ kubectl rollout status deployment/app-recreate --timeout=240s
+Waiting for deployment "app-recreate" rollout to finish: 0 out of 3 new replicas have been updated...
+Waiting for deployment "app-recreate" rollout to finish: 0 out of 3 new replicas have been updated...
+Waiting for deployment "app-recreate" rollout to finish: 0 out of 3 new replicas have been updated...
+Waiting for deployment "app-recreate" rollout to finish: 0 out of 3 new replicas have been updated...
+Waiting for deployment "app-recreate" rollout to finish: 0 out of 3 new replicas have been updated...
+Waiting for deployment "app-recreate" rollout to finish: 0 of 3 updated replicas are available...
+Waiting for deployment "app-recreate" rollout to finish: 1 of 3 updated replicas are available...
+Waiting for deployment "app-recreate" rollout to finish: 2 of 3 updated replicas are available...
+deployment "app-recreate" successfully rolled out
+
+# wait for the Service to have endpoints again before sending traffic:
+$ kubectl wait --for=jsonpath='{.status.readyReplicas}'=3 deployment/app-recreate --timeout=240s
+deployment.apps/app-recreate condition met
+
+$ kubectl exec curl-client -- curl -sS --max-time 10 http://app-recreate-service
+VERSION: v1
+
+$ kubectl get pods -l app=app-recreate --show-labels
+NAME                            READY   STATUS    RESTARTS   AGE   LABELS
+app-recreate-669f7cdfcb-j68hv   1/1     Running   0          3s    app=app-recreate,pod-template-hash=669f7cdfcb,version=v1
+app-recreate-669f7cdfcb-trwxt   1/1     Running   0          3s    app=app-recreate,pod-template-hash=669f7cdfcb,version=v1
+app-recreate-669f7cdfcb-zpjn5   1/1     Running   0          3s    app=app-recreate,pod-template-hash=669f7cdfcb,version=v1
+
+$ kubectl delete -f session10-k8s-core-objects/04-recreate/service.yaml -f session10-k8s-core-objects/04-recreate/deployment-v1.yaml --wait=false
+service "app-recreate-service" deleted from default namespace
+deployment.apps "app-recreate" deleted from default namespace
+

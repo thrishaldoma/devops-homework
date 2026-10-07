@@ -1,0 +1,22 @@
+# Two hostnames, ONE ingress controller, ONE entry IP - routed by the Host header.
+$ kubectl get ingress campus-ingress-tls
+NAME                 CLASS   HOSTS                                  ADDRESS        PORTS     AGE
+campus-ingress-tls   nginx   portal.campus.local,api.campus.local   192.168.49.2   80, 443   68s
+
+# Because these hosts have TLS configured, plain HTTP is redirected to HTTPS:
+$ curl -s -o /dev/null -w 'http  portal.campus.local -> HTTP %{http_code} (redirect to %{redirect_url})\n' -H 'Host: portal.campus.local' http://127.0.0.1:18080/
+http  portal.campus.local -> HTTP 308 (redirect to https://portal.campus.local/)
+
+# 
+# ===== over HTTPS: each virtual host reaches a DIFFERENT backend =====
+$ curl -sk --resolve portal.campus.local:18443:127.0.0.1 https://portal.campus.local:18443/ | grep -i '<title>'
+<title>Welcome to nginx!</title>
+
+#    portal.campus.local -> yatri-frontend-service (nginx)
+$ curl -sk --resolve api.campus.local:18443:127.0.0.1 https://api.campus.local:18443/api/ | head -4
+Yatri Backend API
+path: /
+--------------------------------
+ENVIRONMENT: production
+
+#    api.campus.local    -> yatri-backend-service (python)

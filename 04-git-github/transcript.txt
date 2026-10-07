@@ -1,0 +1,235 @@
+############ PHASE 4 / TASK 1 : commit -a -m  vs  commit -m ############
+
+$ git init -b main
+Initialized empty Git repository in /private/tmp/git-sandbox/commit-demo/.git/
+[exit: 0]
+
+$ git config user.name 'DevOps Student'
+[exit: 0]
+
+$ git config user.email 'student@example.com'
+[exit: 0]
+
+$ git config --local --list
+core.repositoryformatversion=0
+core.filemode=true
+core.bare=false
+core.logallrefupdates=true
+core.ignorecase=true
+core.precomposeunicode=true
+user.name=DevOps Student
+user.email=student@example.com
+[exit: 0]
+
+$ echo line1 > file1.txt && git add . && git commit -m 'initial commit'
+[main (root-commit) da82eaf] initial commit
+ 1 file changed, 1 insertion(+)
+ create mode 100644 file1.txt
+[exit: 0]
+
+$ git log --oneline
+da82eaf initial commit
+[exit: 0]
+
+$ echo modified >> file1.txt
+[exit: 0]
+
+$ echo new > untracked.txt
+[exit: 0]
+
+$ git status -s
+ M file1.txt
+?? untracked.txt
+[exit: 0]
+--- TEST 1: plain 'commit -m' with nothing staged - must be REFUSED (exit 1) ---
+
+$ git commit -m 'try without staging'
+On branch main
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   file1.txt
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	untracked.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")
+[exit: 1]
+--- TEST 2: 'commit -a -m' - stages TRACKED changes only ---
+
+$ git commit -a -m 'commit with -a'
+[main 2936db3] commit with -a
+ 1 file changed, 1 insertion(+)
+[exit: 0]
+
+$ git status -s
+?? untracked.txt
+[exit: 0]
+
+$ git show --stat --oneline HEAD
+2936db3 commit with -a
+ file1.txt | 1 +
+ 1 file changed, 1 insertion(+)
+[exit: 0]
+--- TEST 3: '-a' also picks up DELETIONS of tracked files ---
+
+$ git add untracked.txt && git commit -m 'track the new file'
+[main 6d52c35] track the new file
+ 1 file changed, 1 insertion(+)
+ create mode 100644 untracked.txt
+[exit: 0]
+
+$ rm untracked.txt && echo more >> file1.txt && git status -s
+ M file1.txt
+ D untracked.txt
+[exit: 0]
+
+$ git commit -a -m 'handles modifications and deletions'
+[main 4413b31] handles modifications and deletions
+ 2 files changed, 1 insertion(+), 1 deletion(-)
+ delete mode 100644 untracked.txt
+[exit: 0]
+
+$ git status -s
+[exit: 0]
+
+$ git log --oneline
+4413b31 handles modifications and deletions
+6d52c35 track the new file
+2936db3 commit with -a
+da82eaf initial commit
+[exit: 0]
+############ PHASE 4 / TASK 2 : cherry-pick ############
+
+$ git init -b main
+Initialized empty Git repository in /private/tmp/git-sandbox/cherry-lab/.git/
+[exit: 0]
+
+$ git config user.name 'DevOps Student'
+[exit: 0]
+
+$ git config user.email 'student@example.com'
+[exit: 0]
+--- 3 commits on main ---
+
+$ for i in 1 2 3; do echo "main change $i" >> main.txt; git add .; git commit -m "main: commit $i"; done
+[main (root-commit) bb63f1a] main: commit 1
+ 1 file changed, 1 insertion(+)
+ create mode 100644 main.txt
+[main d3750e2] main: commit 2
+ 1 file changed, 1 insertion(+)
+[main 98e95e7] main: commit 3
+ 1 file changed, 1 insertion(+)
+[exit: 0]
+
+$ git log --oneline
+98e95e7 main: commit 3
+d3750e2 main: commit 2
+bb63f1a main: commit 1
+[exit: 0]
+--- new feature branch with 3 commits ---
+
+$ git checkout -b feature
+Switched to a new branch 'feature'
+[exit: 0]
+
+$ echo 'feature A' > featA.txt && git add . && git commit -m 'feature: add feature A'
+[feature 2c8dccc] feature: add feature A
+ 1 file changed, 1 insertion(+)
+ create mode 100644 featA.txt
+[exit: 0]
+
+$ echo 'hotfix line' > hotfix.txt && git add . && git commit -m 'feature: critical hotfix for login bug'
+[feature 2521f00] feature: critical hotfix for login bug
+ 1 file changed, 1 insertion(+)
+ create mode 100644 hotfix.txt
+[exit: 0]
+
+$ echo 'feature C' > featC.txt && git add . && git commit -m 'feature: add feature C'
+[feature 2915ee8] feature: add feature C
+ 1 file changed, 1 insertion(+)
+ create mode 100644 featC.txt
+[exit: 0]
+
+$ git log --oneline
+2915ee8 feature: add feature C
+2521f00 feature: critical hotfix for login bug
+2c8dccc feature: add feature A
+98e95e7 main: commit 3
+d3750e2 main: commit 2
+bb63f1a main: commit 1
+[exit: 0]
+--- identify the specific commit with git log ---
+
+$ git log --oneline --graph --all --decorate
+* 2915ee8 (HEAD -> feature) feature: add feature C
+* 2521f00 feature: critical hotfix for login bug
+* 2c8dccc feature: add feature A
+* 98e95e7 (main) main: commit 3
+* d3750e2 main: commit 2
+* bb63f1a main: commit 1
+[exit: 0]
+
+selected commit (via git log --grep=hotfix): 2521f00
+
+$ git show 2521f00 --stat
+commit 2521f00b815b7f93d6ed5d82767f0e48b0618425
+Author: DevOps Student <student@example.com>
+Date:   Fri Sep 4 22:04:29 2026 +0530
+
+    feature: critical hotfix for login bug
+
+ hotfix.txt | 1 +
+ 1 file changed, 1 insertion(+)
+[exit: 0]
+--- cherry-pick onto main ---
+
+$ git checkout main
+Switched to branch 'main'
+[exit: 0]
+  (hotfix.txt must NOT be present yet:)
+
+$ ls
+main.txt
+[exit: 0]
+
+$ git cherry-pick 2521f00
+[main 00dd1ef] feature: critical hotfix for login bug
+ Date: Fri Sep 4 22:04:29 2026 +0530
+ 1 file changed, 1 insertion(+)
+ create mode 100644 hotfix.txt
+[exit: 0]
+--- verify the pick ---
+  (hotfix.txt must now be present:)
+
+$ ls
+hotfix.txt
+main.txt
+[exit: 0]
+
+$ cat hotfix.txt
+hotfix line
+[exit: 0]
+
+$ git log --oneline
+00dd1ef feature: critical hotfix for login bug
+98e95e7 main: commit 3
+d3750e2 main: commit 2
+bb63f1a main: commit 1
+[exit: 0]
+
+$ git log --oneline --graph --all --decorate
+* 00dd1ef (HEAD -> main) feature: critical hotfix for login bug
+| * 2915ee8 (feature) feature: add feature C
+| * 2521f00 feature: critical hotfix for login bug
+| * 2c8dccc feature: add feature A
+|/  
+* 98e95e7 main: commit 3
+* d3750e2 main: commit 2
+* bb63f1a main: commit 1
+[exit: 0]
+
+ORIGINAL hotfix hash on feature : 2521f00
+COPIED  hotfix hash on main     : 00dd1ef
+(different hashes prove cherry-pick COPIES a commit, it does not move it)

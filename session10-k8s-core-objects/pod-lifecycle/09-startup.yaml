@@ -1,0 +1,22 @@
+# Startup probe - protects a slow-booting app. While the startup probe is
+# still running the liveness probe is suspended, so a 30s boot is not
+# mistaken for a hang and killed.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lifecycle-startup
+spec:
+  containers:
+    - name: slow-app
+      image: busybox:1.36
+      command: ["/bin/sh", "-c", "echo 'slow legacy boot...'; sleep 30; touch /tmp/started; echo 'started'; sleep 3600"]
+      startupProbe:
+        exec:
+          command: ["cat", "/tmp/started"]
+        periodSeconds: 5
+        failureThreshold: 30     # allows up to 150s to finish booting
+      livenessProbe:
+        exec:
+          command: ["cat", "/tmp/started"]
+        periodSeconds: 5
+        failureThreshold: 3

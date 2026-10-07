@@ -1,0 +1,40 @@
+# A type: LoadBalancer Service asks an external controller for a public IP.
+# There is no cloud provider here, so the MetalLB addon plays that role.
+# Without any LB controller the EXTERNAL-IP column stays <pending> forever.
+$ kubectl get svc web-service-loadbalancer
+NAME                       TYPE           CLUSTER-IP       EXTERNAL-IP      PORT(S)        AGE
+web-service-loadbalancer   LoadBalancer   10.107.135.208   192.168.49.200   80:32365/TCP   48s
+
+# MetalLB assigned 192.168.49.200 from its configured layer-2 pool within ~1s.
+# 
+# KEY POINT - LoadBalancer is a SUPERSET of the other two types. Kubernetes also
+# allocated a ClusterIP and a nodePort; the external LB just targets that nodePort.
+$ kubectl get svc web-service-loadbalancer -o jsonpath='ClusterIP  : {.spec.clusterIP}{"\n"}nodePort   : {.spec.ports[0].nodePort}{"\n"}port       : {.spec.ports[0].port}{"\n"}targetPort : {.spec.ports[0].targetPort}{"\n"}EXTERNAL-IP: {.status.loadBalancer.ingress[0].ip}{"\n"}'
+ClusterIP  : 10.107.135.208
+nodePort   : 32365
+port       : 80
+targetPort : 80
+EXTERNAL-IP: 192.168.49.200
+
+$ kubectl get endpointslice -l kubernetes.io/service-name=web-service-loadbalancer -o custom-columns='ENDPOINTS:.endpoints[*].addresses'
+ENDPOINTS
+[10.244.0.28],[10.244.1.68],[10.244.1.69]
+
+# 
+# Access on the external IP, plain port 80 - no high port number needed.
+# MetalLB layer-2 answers ARP on the NODE network, so we curl from the node:
+$ minikube ssh -- "curl -s -o /dev/null -w 'http://192.168.49.200 -> HTTP %{http_code}\n' --max-time 8 http://192.168.49.200" 2>/dev/null
+http://192.168.49.200 -> HTTP 200
+
+$ minikube ssh -- "curl -s --max-time 8 http://192.168.49.200 | grep -i '<title>'" 2>/dev/null
+<title>Welcome to nginx!</title>
+
+# 
+# LIMITATION on this machine: 192.168.49.0/24 is Docker's internal bridge, which
+# macOS cannot route to (same root cause as the NodePort gotcha in Task 12).
+# The documented fix, 'minikube tunnel', needs root and passwordless sudo is not
+# available in this environment, so host-side access uses 'minikube service --url'.
+$ kubectl delete -f session-11-kubernetes-services/03-loadbalancer/service.yaml -f session-11-kubernetes-services/03-loadbalancer/app-deployment.yaml --wait=false
+service "web-service-loadbalancer" deleted from default namespace
+deployment.apps "web-app-loadbalancer" deleted from default namespace
+

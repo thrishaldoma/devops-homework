@@ -1,0 +1,14 @@
+# Non-sensitive runtime configuration, decoupled from the container image.
+# The same image can now run in dev/staging/production by swapping this object.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: yatri-app-config
+  labels:
+    app: yatri-app
+data:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  PORT: "8080"
+  DEFAULT_CURRENCY: "INR"
+  MAX_BOOKING_DAYS: "90"

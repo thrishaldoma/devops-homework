@@ -1,0 +1,427 @@
+############ PHASE 3 : subnetting verified with python3 ipaddress (ipcalc absent on macOS) ############
+
+$ python3 /tmp/subnet.py
+--- 197.23.45.10/24 ---
+Address        : 197.23.45.10
+Netmask        : 255.255.255.0  (/24)
+Wildcard       : 0.0.0.255
+Class          : C  (first octet 197)
+Network bits   : 24        Host bits : 8
+Network address: 197.23.45.0
+Broadcast      : 197.23.45.255
+Usable range   : 197.23.45.1 -> 197.23.45.254
+Total addresses: 2^8 = 256
+Usable hosts   : 2^8 - 2 = 254
+Is private     : False
+
+--- 120.27.1.0/8 ---
+Address        : 120.27.1.0
+Netmask        : 255.0.0.0  (/8)
+Wildcard       : 0.255.255.255
+Class          : A  (first octet 120)
+Network bits   : 8        Host bits : 24
+Network address: 120.0.0.0
+Broadcast      : 120.255.255.255
+Usable range   : 120.0.0.1 -> 120.255.255.254
+Total addresses: 2^24 = 16777216
+Usable hosts   : 2^24 - 2 = 16777214
+Is private     : False
+
+--- 192.168.10.0/26 ---
+Address        : 192.168.10.0
+Netmask        : 255.255.255.192  (/26)
+Wildcard       : 0.0.0.63
+Class          : C  (first octet 192)
+Network bits   : 26        Host bits : 6
+Network address: 192.168.10.0
+Broadcast      : 192.168.10.63
+Usable range   : 192.168.10.1 -> 192.168.10.62
+Total addresses: 2^6 = 64
+Usable hosts   : 2^6 - 2 = 62
+Is private     : True
+
+[exit: 0]
+
+############ PHASE 3 : LINUX COMMAND LAB (in linux-lab container) ############
+
+$ hostname
+4f1eb9c1623d
+[exit: 0]
+
+$ hostname -I
+172.17.0.2 
+[exit: 0]
+
+$ ip addr show
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: tunl0@NONE: <NOARP> mtu 1480 qdisc noop state DOWN group default qlen 1000
+    link/ipip 0.0.0.0 brd 0.0.0.0
+3: gre0@NONE: <NOARP> mtu 1476 qdisc noop state DOWN group default qlen 1000
+    link/gre 0.0.0.0 brd 0.0.0.0
+4: gretap0@NONE: <BROADCAST,MULTICAST> mtu 1462 qdisc noop state DOWN group default qlen 1000
+    link/ether 00:00:00:00:00:00 brd ff:ff:ff:ff:ff:ff
+5: erspan0@NONE: <BROADCAST,MULTICAST> mtu 1450 qdisc noop state DOWN group default qlen 1000
+    link/ether 00:00:00:00:00:00 brd ff:ff:ff:ff:ff:ff
+6: ip_vti0@NONE: <NOARP> mtu 1480 qdisc noop state DOWN group default qlen 1000
+    link/ipip 0.0.0.0 brd 0.0.0.0
+7: ip6_vti0@NONE: <NOARP> mtu 1428 qdisc noop state DOWN group default qlen 1000
+    link/tunnel6 :: brd :: permaddr fa90:a6e8:de22::
+8: sit0@NONE: <NOARP> mtu 1480 qdisc noop state DOWN group default qlen 1000
+    link/sit 0.0.0.0 brd 0.0.0.0
+9: ip6tnl0@NONE: <NOARP> mtu 1452 qdisc noop state DOWN group default qlen 1000
+    link/tunnel6 :: brd :: permaddr 5e1b:16b2:5b47::
+10: ip6gre0@NONE: <NOARP> mtu 1448 qdisc noop state DOWN group default qlen 1000
+    link/gre6 :: brd :: permaddr 4a9e:285a:fa57::
+11: eth0@if21: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 65535 qdisc noqueue state UP group default 
+    link/ether 6e:5c:94:06:90:29 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0
+       valid_lft forever preferred_lft forever
+[exit: 0]
+
+$ ip -brief addr
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+tunl0@NONE       DOWN           
+gre0@NONE        DOWN           
+gretap0@NONE     DOWN           
+erspan0@NONE     DOWN           
+ip_vti0@NONE     DOWN           
+ip6_vti0@NONE    DOWN           
+sit0@NONE        DOWN           
+ip6tnl0@NONE     DOWN           
+ip6gre0@NONE     DOWN           
+eth0@if21        UP             172.17.0.2/16 
+[exit: 0]
+
+$ ip route show
+default via 172.17.0.1 dev eth0 
+172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.2 
+[exit: 0]
+
+$ ip link show
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+2: tunl0@NONE: <NOARP> mtu 1480 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/ipip 0.0.0.0 brd 0.0.0.0
+3: gre0@NONE: <NOARP> mtu 1476 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/gre 0.0.0.0 brd 0.0.0.0
+4: gretap0@NONE: <BROADCAST,MULTICAST> mtu 1462 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/ether 00:00:00:00:00:00 brd ff:ff:ff:ff:ff:ff
+5: erspan0@NONE: <BROADCAST,MULTICAST> mtu 1450 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/ether 00:00:00:00:00:00 brd ff:ff:ff:ff:ff:ff
+6: ip_vti0@NONE: <NOARP> mtu 1480 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/ipip 0.0.0.0 brd 0.0.0.0
+7: ip6_vti0@NONE: <NOARP> mtu 1428 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/tunnel6 :: brd :: permaddr fa90:a6e8:de22::
+8: sit0@NONE: <NOARP> mtu 1480 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/sit 0.0.0.0 brd 0.0.0.0
+9: ip6tnl0@NONE: <NOARP> mtu 1452 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/tunnel6 :: brd :: permaddr 5e1b:16b2:5b47::
+10: ip6gre0@NONE: <NOARP> mtu 1448 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/gre6 :: brd :: permaddr 4a9e:285a:fa57::
+11: eth0@if21: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 65535 qdisc noqueue state UP mode DEFAULT group default 
+    link/ether 6e:5c:94:06:90:29 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+[exit: 0]
+
+$ ip neigh show
+172.17.0.1 dev eth0 lladdr ca:c1:ea:59:c9:69 STALE
+[exit: 0]
+
+$ ifconfig
+eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 65535
+        inet 172.17.0.2  netmask 255.255.0.0  broadcast 172.17.255.255
+        ether 6e:5c:94:06:90:29  txqueuelen 0  (Ethernet)
+        RX packets 20  bytes 1670 (1.6 KB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 11  bytes 622 (622.0 B)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+        inet 127.0.0.1  netmask 255.0.0.0
+        inet6 ::1  prefixlen 128  scopeid 0x10<host>
+        loop  txqueuelen 1000  (Local Loopback)
+        RX packets 10  bytes 1468 (1.4 KB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 10  bytes 1468 (1.4 KB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+[exit: 0]
+
+$ route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+0.0.0.0         172.17.0.1      0.0.0.0         UG    0      0        0 eth0
+172.17.0.0      0.0.0.0         255.255.0.0     U     0      0        0 eth0
+[exit: 0]
+
+$ ping -c 4 8.8.8.8
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=63 time=18.3 ms
+64 bytes from 8.8.8.8: icmp_seq=2 ttl=63 time=13.9 ms
+64 bytes from 8.8.8.8: icmp_seq=3 ttl=63 time=12.1 ms
+64 bytes from 8.8.8.8: icmp_seq=4 ttl=63 time=48.6 ms
+
+--- 8.8.8.8 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3016ms
+rtt min/avg/max/mdev = 12.122/23.233/48.598/14.814 ms
+[exit: 0]
+
+$ ping -c 4 google.com
+PING google.com (142.251.221.238) 56(84) bytes of data.
+64 bytes from 142.251.221.238: icmp_seq=1 ttl=63 time=35.8 ms
+64 bytes from 142.251.221.238 (142.251.221.238): icmp_seq=2 ttl=63 time=26.2 ms
+64 bytes from 142.251.221.238 (142.251.221.238): icmp_seq=3 ttl=63 time=64.8 ms
+64 bytes from 142.251.221.238 (142.251.221.238): icmp_seq=4 ttl=63 time=104 ms
+
+--- google.com ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 13237ms
+rtt min/avg/max/mdev = 26.213/57.652/103.810/30.193 ms
+[exit: 0]
+
+$ traceroute -m 12 -w 2 google.com
+traceroute to google.com (142.251.221.238), 12 hops max, 60 byte packets
+ 1  172.17.0.1 (172.17.0.1)  0.250 ms  0.183 ms  0.168 ms
+ 2  * * *
+ 3  * * *
+ 4  * * *
+ 5  * * *
+ 6  * * *
+ 7  * * *
+ 8  * * *
+ 9  * * *
+10  * * *
+11  * * *
+12  * * *
+[exit: 0]
+
+$ dig google.com
+
+; <<>> DiG 9.18.39-0ubuntu0.22.04.6-Ubuntu <<>> google.com
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 38544
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 0
+
+;; QUESTION SECTION:
+;google.com.			IN	A
+
+;; ANSWER SECTION:
+google.com.		355	IN	A	142.251.221.238
+
+;; Query time: 2 msec
+;; SERVER: 192.168.65.7#53(192.168.65.7) (UDP)
+;; WHEN: Fri Sep 04 17:19:41 UTC 2026
+;; MSG SIZE  rcvd: 54
+
+[exit: 0]
+
+$ dig +short google.com A
+142.251.221.238
+[exit: 0]
+
+$ dig -x 8.8.8.8
+
+; <<>> DiG 9.18.39-0ubuntu0.22.04.6-Ubuntu <<>> -x 8.8.8.8
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 29542
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 0
+
+;; QUESTION SECTION:
+;8.8.8.8.in-addr.arpa.		IN	PTR
+
+;; ANSWER SECTION:
+8.8.8.8.in-addr.arpa.	4502	IN	PTR	dns.google.
+
+;; Query time: 3094 msec
+;; SERVER: 192.168.65.7#53(192.168.65.7) (UDP)
+;; WHEN: Fri Sep 04 17:19:45 UTC 2026
+;; MSG SIZE  rcvd: 82
+
+[exit: 0]
+
+$ nslookup github.com
+;; communications error to 192.168.65.7#53: timed out
+Server:		192.168.65.7
+Address:	192.168.65.7#53
+
+Non-authoritative answer:
+Name:	github.com
+Address: 20.207.73.82
+
+[exit: 0]
+
+$ host github.com
+github.com has address 20.207.73.82
+github.com mail is handled by 0 github-com.mail.protection.outlook.com.
+[exit: 0]
+
+$ cat /etc/resolv.conf
+# Generated by Docker Engine.
+# This file can be edited; Docker Engine will not make further changes once it
+# has been modified.
+
+nameserver 192.168.65.7
+
+# Based on host file: '/etc/resolv.conf' (legacy)
+# Overrides: []
+[exit: 0]
+
+$ cat /etc/hosts
+127.0.0.1	localhost
+::1	localhost ip6-localhost ip6-loopback
+fe00::	ip6-localnet
+ff00::	ip6-mcastprefix
+ff02::1	ip6-allnodes
+ff02::2	ip6-allrouters
+172.17.0.2	4f1eb9c1623d
+[exit: 0]
+
+$ ss -tulnp
+Netid State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess                                                                                                                                                                                                                                                                                                                                                                                 
+tcp   LISTEN 0      511          0.0.0.0:80        0.0.0.0:*    users:(("nginx",pid=730,fd=6),("nginx",pid=729,fd=6),("nginx",pid=728,fd=6),("nginx",pid=727,fd=6),("nginx",pid=726,fd=6),("nginx",pid=725,fd=6),("nginx",pid=724,fd=6),("nginx",pid=723,fd=6),("nginx",pid=722,fd=6),("nginx",pid=721,fd=6),("nginx",pid=720,fd=6),("nginx",pid=719,fd=6),("nginx",pid=718,fd=6),("nginx",pid=717,fd=6),("nginx",pid=716,fd=6),("nginx",pid=715,fd=6))
+tcp   LISTEN 0      511             [::]:80           [::]:*    users:(("nginx",pid=730,fd=7),("nginx",pid=729,fd=7),("nginx",pid=728,fd=7),("nginx",pid=727,fd=7),("nginx",pid=726,fd=7),("nginx",pid=725,fd=7),("nginx",pid=724,fd=7),("nginx",pid=723,fd=7),("nginx",pid=722,fd=7),("nginx",pid=721,fd=7),("nginx",pid=720,fd=7),("nginx",pid=719,fd=7),("nginx",pid=718,fd=7),("nginx",pid=717,fd=7),("nginx",pid=716,fd=7),("nginx",pid=715,fd=7))
+[exit: 0]
+
+$ netstat -tulnp
+Active Internet connections (only servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    
+tcp        0      0 0.0.0.0:80              0.0.0.0:*               LISTEN      715/nginx: master p 
+tcp6       0      0 :::80                   :::*                    LISTEN      715/nginx: master p 
+[exit: 0]
+
+$ ss -s
+Total: 66
+TCP:   23 (estab 0, closed 21, orphaned 0, timewait 0)
+
+Transport Total     IP        IPv6
+RAW	  0         0         0        
+UDP	  0         0         0        
+TCP	  2         1         1        
+INET	  2         1         1        
+FRAG	  0         0         0        
+
+[exit: 0]
+
+$ curl -sI https://github.com
+[exit: 0]
+
+$ curl -s ifconfig.me; echo
+202.131.133.51
+[exit: 0]
+
+$ nc -zv github.com 443
+Connection to github.com (20.207.73.82) 443 port [tcp/*] succeeded!
+[exit: 0]
+
+$ nmap -F localhost
+Starting Nmap 7.80 ( https://nmap.org ) at 2026-09-04 17:19 UTC
+Nmap scan report for localhost (127.0.0.1)
+Host is up (0.0000010s latency).
+Other addresses for localhost (not scanned): ::1
+Not shown: 99 closed ports
+PORT   STATE SERVICE
+80/tcp open  http
+
+Nmap done: 1 IP address (1 host up) scanned in 0.04 seconds
+[exit: 0]
+
+$ whois github.com | head -25
+getaddrinfo(whois.verisign-grs.com): Servname not supported for ai_socktype
+[exit: 0]
+
+$ ipcalc 197.23.45.10/24
+Address:   197.23.45.10         11000101.00010111.00101101. 00001010
+Netmask:   255.255.255.0 = 24   11111111.11111111.11111111. 00000000
+Wildcard:  0.0.0.255            00000000.00000000.00000000. 11111111
+=>
+Network:   197.23.45.0/24       11000101.00010111.00101101. 00000000
+HostMin:   197.23.45.1          11000101.00010111.00101101. 00000001
+HostMax:   197.23.45.254        11000101.00010111.00101101. 11111110
+Broadcast: 197.23.45.255        11000101.00010111.00101101. 11111111
+Hosts/Net: 254                   Class C
+
+[exit: 0]
+
+$ ipcalc 120.27.1.0/8
+Address:   120.27.1.0           01111000. 00011011.00000001.00000000
+Netmask:   255.0.0.0 = 8        11111111. 00000000.00000000.00000000
+Wildcard:  0.255.255.255        00000000. 11111111.11111111.11111111
+=>
+Network:   120.0.0.0/8          01111000. 00000000.00000000.00000000
+HostMin:   120.0.0.1            01111000. 00000000.00000000.00000001
+HostMax:   120.255.255.254      01111000. 11111111.11111111.11111110
+Broadcast: 120.255.255.255      01111000. 11111111.11111111.11111111
+Hosts/Net: 16777214              Class A
+
+[exit: 0]
+
+$ ipcalc 192.168.10.0/26
+Address:   192.168.10.0         11000000.10101000.00001010.00 000000
+Netmask:   255.255.255.192 = 26 11111111.11111111.11111111.11 000000
+Wildcard:  0.0.0.63             00000000.00000000.00000000.00 111111
+=>
+Network:   192.168.10.0/26      11000000.10101000.00001010.00 000000
+HostMin:   192.168.10.1         11000000.10101000.00001010.00 000001
+HostMax:   192.168.10.62        11000000.10101000.00001010.00 111110
+Broadcast: 192.168.10.63        11000000.10101000.00001010.00 111111
+Hosts/Net: 62                    Class C, Private Internet
+
+[exit: 0]
+
+$ tcpdump -i any -c 10 -nn port 80 & sleep 1; curl -s localhost >/dev/null; wait
+tcpdump: data link type LINUX_SLL2
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on any, link-type LINUX_SLL2 (Linux cooked v2), snapshot length 262144 bytes
+10 packets captured
+20 packets received by filter
+0 packets dropped by kernel
+17:19:57.455426 lo    In  IP 127.0.0.1.55520 > 127.0.0.1.80: Flags [S], seq 511799250, win 65495, options [mss 65495,sackOK,TS val 514557343 ecr 0,nop,wscale 10], length 0
+17:19:57.455448 lo    In  IP 127.0.0.1.80 > 127.0.0.1.55520: Flags [S.], seq 1207467818, ack 511799251, win 65483, options [mss 65495,sackOK,TS val 3031702422 ecr 514557343,nop,wscale 10], length 0
+17:19:57.455468 lo    In  IP 127.0.0.1.55520 > 127.0.0.1.80: Flags [.], ack 1, win 64, options [nop,nop,TS val 514557343 ecr 3031702422], length 0
+17:19:57.455535 lo    In  IP 127.0.0.1.55520 > 127.0.0.1.80: Flags [P.], seq 1:74, ack 1, win 64, options [nop,nop,TS val 514557343 ecr 3031702422], length 73: HTTP: GET / HTTP/1.1
+17:19:57.455540 lo    In  IP 127.0.0.1.80 > 127.0.0.1.55520: Flags [.], ack 74, win 64, options [nop,nop,TS val 3031702422 ecr 514557343], length 0
+17:19:57.456138 lo    In  IP 127.0.0.1.80 > 127.0.0.1.55520: Flags [P.], seq 1:860, ack 74, win 64, options [nop,nop,TS val 3031702422 ecr 514557343], length 859: HTTP: HTTP/1.1 200 OK
+17:19:57.456155 lo    In  IP 127.0.0.1.55520 > 127.0.0.1.80: Flags [.], ack 860, win 64, options [nop,nop,TS val 514557343 ecr 3031702422], length 0
+17:19:57.456241 lo    In  IP 127.0.0.1.55520 > 127.0.0.1.80: Flags [F.], seq 74, ack 860, win 64, options [nop,nop,TS val 514557343 ecr 3031702422], length 0
+17:19:57.456277 lo    In  IP 127.0.0.1.80 > 127.0.0.1.55520: Flags [F.], seq 860, ack 75, win 64, options [nop,nop,TS val 3031702422 ecr 514557343], length 0
+17:19:57.456299 lo    In  IP 127.0.0.1.55520 > 127.0.0.1.80: Flags [.], ack 861, win 64, options [nop,nop,TS val 514557343 ecr 3031702422], length 0
+[exit: 0]
+
+$ curl -sSI https://github.com   # retry: first attempt returned empty
+curl: (77) error setting certificate file: /etc/ssl/certs/ca-certificates.crt
+[exit: 0]
+
+$ whois -h whois.verisign-grs.com github.com | head -12   # retry with explicit -h
+getaddrinfo(whois.verisign-grs.com): Servname not supported for ai_socktype
+[exit: 0]
+
+$ ls -la /etc/ssl/certs/ca-certificates.crt; dpkg -l ca-certificates 2>&1 | tail -2
+ls: cannot access '/etc/ssl/certs/ca-certificates.crt': No such file or directory
++++-===============-============-============-=================================
+un  ca-certificates <none>       <none>       (no description available)
+[exit: 0]
+
+$ apt-get install -y ca-certificates && curl -sSI https://github.com | head -4
+HTTP/2 200 
+date: Fri, 04 Sep 2026 17:22:52 GMT
+content-type: text/html; charset=utf-8
+content-language: en-US
+[exit: 0]
+
+$ whois -h whois.verisign-grs.com -p 43 github.com | head -10
+   Domain Name: GITHUB.COM
+   Registry Domain ID: 1264983250_DOMAIN_COM-VRSN
+   Registrar WHOIS Server: whois.markmonitor.com
+   Registrar URL: http://www.markmonitor.com
+   Updated Date: 2024-09-07T09:16:32Z
+   Creation Date: 2007-10-09T18:20:50Z
+   Registry Expiry Date: 2026-10-09T18:20:50Z
+   Registrar: MarkMonitor Inc.
+   Registrar IANA ID: 292
+   Registrar Abuse Contact Email: abusecomplaints@markmonitor.com
+[exit: 0]

@@ -1,0 +1,88 @@
+# ########## DRILL 1: broken image tag stalls a rollout ##########
+$ kubectl apply -f session10-k8s-core-objects/troubleshooting/deployment-good.yaml
+deployment.apps/yatri-backend created
+
+$ kubectl rollout status deployment/yatri-backend --timeout=180s
+Waiting for deployment "yatri-backend" rollout to finish: 0 of 3 updated replicas are available...
+Waiting for deployment "yatri-backend" rollout to finish: 1 of 3 updated replicas are available...
+Waiting for deployment "yatri-backend" rollout to finish: 2 of 3 updated replicas are available...
+deployment "yatri-backend" successfully rolled out
+
+# now roll out a revision whose image tag does not exist:
+$ kubectl apply -f session10-k8s-core-objects/troubleshooting/broken-image.yaml
+deployment.apps/yatri-backend configured
+
+$ kubectl rollout status deployment/yatri-backend --timeout=30s
+Waiting for deployment "yatri-backend" rollout to finish: 1 out of 3 new replicas have been updated...
+error: timed out waiting for the condition
+
+$ kubectl get pods -l app=yatri-backend
+NAME                             READY   STATUS             RESTARTS   AGE
+yatri-backend-856477d48-5dmq4    1/1     Running            0          31s
+yatri-backend-856477d48-vqmlq    1/1     Running            0          31s
+yatri-backend-856477d48-zdgfp    1/1     Running            0          31s
+yatri-backend-86569d4ccf-hwskw   0/1     ImagePullBackOff   0          30s
+
+# DIAGNOSIS - the 3 old v1 pods are still Running and serving traffic.
+# maxUnavailable:0 stopped Kubernetes from removing a healthy pod for a broken one.
+$ kubectl describe pod -l version=v2-broken | grep -A 4 'Events:' | tail -3
+  ----     ------     ----              ----               -------
+  Normal   Scheduled  30s               default-scheduler  Successfully assigned default/yatri-backend-86569d4ccf-hwskw to minikube-m02
+  Normal   BackOff    20s               kubelet            spec.containers{backend}: Back-off pulling image "nginx:v99-does-not-exist"
+
+$ kubectl get deployment yatri-backend
+NAME            READY   UP-TO-DATE   AVAILABLE   AGE
+yatri-backend   3/3     1            3           31s
+
+# RESOLUTION - undo the bad revision:
+$ kubectl rollout undo deployment/yatri-backend
+Warning: resource deployments/yatri-backend was previously managed with 'kubectl apply'. Rolling back will not update the kubectl.kubernetes.io/last-applied-configuration annotation, which may cause unexpected behavior on future 'kubectl apply' operations. Consider using 'kubectl apply' with your previous configuration file instead.
+deployment.apps/yatri-backend rolled back
+
+$ kubectl rollout status deployment/yatri-backend --timeout=180s
+deployment "yatri-backend" successfully rolled out
+
+$ kubectl get pods -l app=yatri-backend
+NAME                             READY   STATUS        RESTARTS   AGE
+yatri-backend-856477d48-5dmq4    1/1     Running       0          31s
+yatri-backend-856477d48-vqmlq    1/1     Running       0          31s
+yatri-backend-856477d48-zdgfp    1/1     Running       0          31s
+yatri-backend-86569d4ccf-hwskw   0/1     Terminating   0          30s
+
+$ kubectl delete deployment yatri-backend --wait=false
+deployment.apps "yatri-backend" deleted from default namespace
+
+# 
+# ########## DRILL 2: immutable selector / template label mismatch ##########
+$ grep -E 'matchLabels|app:' session10-k8s-core-objects/troubleshooting/selector-mismatch.yaml
+# spec.selector.matchLabels (app: backend) does not match
+# spec.template.metadata.labels (app: frontend).
+    matchLabels:
+      app: backend      # <-- selector says "backend"
+        app: frontend   # <-- template says "frontend"  => REJECTED
+
+# applying it - the API server rejects the object at admission time:
+$ kubectl apply -f session10-k8s-core-objects/troubleshooting/selector-mismatch.yaml
+The Deployment "selector-error-demo" is invalid: spec.template.metadata.labels: Invalid value: {"app":"frontend"}: `selector` does not match template `labels`
+
+# FIX: make spec.template.metadata.labels match spec.selector.matchLabels
+$ diff session10-k8s-core-objects/troubleshooting/selector-mismatch.yaml session10-k8s-core-objects/troubleshooting/selector-fixed.yaml
+1c1
+< # Drill 2 - INVALID ON PURPOSE.
+---
+> # Drill 2 - CORRECTED version (selector == template labels).
+19c19
+<         app: frontend   # <-- template says "frontend"  => REJECTED
+---
+>         app: backend    # <-- FIXED: now matches the selector
+
+$ kubectl apply -f session10-k8s-core-objects/troubleshooting/selector-fixed.yaml
+deployment.apps/selector-error-demo created
+
+$ kubectl get deployment selector-error-demo
+NAME                  READY   UP-TO-DATE   AVAILABLE   AGE
+selector-error-demo   0/2     2            0           0s
+
+$ kubectl delete -f session10-k8s-core-objects/troubleshooting/selector-fixed.yaml --wait=false
+deployment.apps "selector-error-demo" deleted from default namespace
+

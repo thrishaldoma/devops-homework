@@ -1,0 +1,686 @@
+############ PHASE 1 : boot the Ubuntu 22.04 + systemd lab ############
+
+$ docker run -d --name linux-lab --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw --tmpfs /run --tmpfs /run/lock linux-lab:v1
+4f1eb9c1623da11a5f63d401b9866f520f3b74c2f0f5b1c7ff20f5c982b4e991
+[exit: 0]
+
+$ docker exec linux-lab ps -p 1 -o comm=
+systemd
+[exit: 0]
+
+$ docker exec linux-lab systemctl is-system-running
+running
+[exit: 0]
+
+$ docker exec linux-lab systemctl status systemd-journald --no-pager | head -6
+● systemd-journald.service - Journal Service
+     Loaded: loaded (/lib/systemd/system/systemd-journald.service; static)
+     Active: active (running) since Fri 2026-09-04 17:10:41 UTC; 10s ago
+TriggeredBy: ● systemd-journald.socket
+             ● systemd-journald-dev-log.socket
+             ● systemd-journald-audit.socket
+[exit: 0]
+
+############ TASK 1 : SOFT LINKS vs HARD LINKS ############
+
+$ mkdir -p /root/links-lab && cd /root/links-lab && echo "This is the original file content." > original.txt && ls -li original.txt
+66068 -rw-r--r-- 1 root root 35 Sep  4 17:11 original.txt
+[exit: 0]
+
+$ cd /root/links-lab && ln original.txt hardlink.txt && ln -s original.txt softlink.txt && ls -li
+total 8
+66068 -rw-r--r-- 2 root root 35 Sep  4 17:11 hardlink.txt
+66068 -rw-r--r-- 2 root root 35 Sep  4 17:11 original.txt
+66069 lrwxrwxrwx 1 root root 12 Sep  4 17:11 softlink.txt -> original.txt
+[exit: 0]
+
+$ cd /root/links-lab && cat original.txt; cat hardlink.txt; cat softlink.txt
+This is the original file content.
+This is the original file content.
+This is the original file content.
+[exit: 0]
+
+$ cd /root/links-lab && echo "Line added via the hard link." >> hardlink.txt && cat original.txt
+This is the original file content.
+Line added via the hard link.
+[exit: 0]
+
+$ cd /root/links-lab && stat original.txt
+  File: original.txt
+  Size: 65        	Blocks: 8          IO Block: 4096   regular file
+Device: 2fh/47d	Inode: 66068       Links: 2
+Access: (0644/-rw-r--r--)  Uid: (    0/    root)   Gid: (    0/    root)
+Access: 2026-09-04 17:11:30.433791711 +0000
+Modify: 2026-09-04 17:11:30.432839003 +0000
+Change: 2026-09-04 17:11:30.432839003 +0000
+ Birth: 2026-09-04 17:11:30.324839002 +0000
+[exit: 0]
+
+$ cd /root/links-lab && readlink softlink.txt; readlink -f softlink.txt
+original.txt
+/root/links-lab/original.txt
+[exit: 0]
+
+$ cd /root/links-lab && rm original.txt && ls -li
+total 4
+66068 -rw-r--r-- 1 root root 65 Sep  4 17:11 hardlink.txt
+66069 lrwxrwxrwx 1 root root 12 Sep  4 17:11 softlink.txt -> original.txt
+[exit: 0]
+
+$ cd /root/links-lab && echo "--- hard link ---"; cat hardlink.txt
+--- hard link ---
+This is the original file content.
+Line added via the hard link.
+[exit: 0]
+
+$ cd /root/links-lab && echo "--- soft link (must FAIL) ---"; cat softlink.txt
+--- soft link (must FAIL) ---
+cat: softlink.txt: No such file or directory
+[exit: 1]
+
+$ cd /root/links-lab && cp hardlink.txt original.txt && echo "--- symlink heals ---" && cat softlink.txt
+--- symlink heals ---
+This is the original file content.
+Line added via the hard link.
+[exit: 0]
+
+$ cd /root/links-lab && mkdir -p mydir && ln -s mydir dirlink && ls -ld dirlink
+lrwxrwxrwx 1 root root 5 Sep  4 17:11 dirlink -> mydir
+[exit: 0]
+
+$ cd /root/links-lab && echo "--- hard link to a DIRECTORY (must FAIL) ---"; ln mydir dirhard
+--- hard link to a DIRECTORY (must FAIL) ---
+ln: mydir: hard link not allowed for directory
+[exit: 1]
+
+$ cd /root/links-lab && find . -type l -ls
+    66069      0 lrwxrwxrwx   1 root     root           12 Sep  4 17:11 ./softlink.txt -> original.txt
+    66072      0 lrwxrwxrwx   1 root     root            5 Sep  4 17:11 ./dirlink -> mydir
+[exit: 0]
+
+$ cd /root/links-lab && rm -f broken && ln -s /nonexistent broken && find . -xtype l
+./broken
+[exit: 0]
+
+$ cd /root/links-lab && unlink softlink.txt && ls
+broken
+dirlink
+hardlink.txt
+mydir
+original.txt
+[exit: 0]
+
+$ cd /root/links-lab && rm dirlink && ls
+broken
+hardlink.txt
+mydir
+original.txt
+[exit: 0]
+
+############ TASK 2 : adduser vs useradd ############
+
+$ which adduser useradd
+/usr/sbin/adduser
+/usr/sbin/useradd
+[exit: 0]
+
+$ file /usr/sbin/adduser /usr/sbin/useradd
+/usr/sbin/adduser: Perl script text executable
+/usr/sbin/useradd: ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux-aarch64.so.1, BuildID[sha1]=9ca25c8dea54feb7dcadf3675981738d91ae86f9, for GNU/Linux 3.7.0, stripped
+[exit: 0]
+
+$ head -3 /usr/sbin/adduser
+#!/usr/bin/perl
+
+# adduser: a utility to add users to the system
+[exit: 0]
+
+$ grep -vE '^\s*#|^$' /etc/adduser.conf | head -12
+DSHELL=/bin/bash
+DHOME=/home
+GROUPHOMES=no
+LETTERHOMES=no
+SKEL=/etc/skel
+FIRST_SYSTEM_UID=100
+LAST_SYSTEM_UID=999
+FIRST_SYSTEM_GID=100
+LAST_SYSTEM_GID=999
+FIRST_UID=1000
+LAST_UID=59999
+FIRST_GID=1000
+[exit: 0]
+
+$ adduser --gecos "Test User,,," --disabled-password testuser
+Adding user `testuser' ...
+Adding new group `testuser' (1000) ...
+Adding new user `testuser' (1000) with group `testuser' ...
+Creating home directory `/home/testuser' ...
+Copying files from `/etc/skel' ...
+[exit: 0]
+
+$ echo 'testuser:TestPass123' | chpasswd && echo "password set for testuser"
+password set for testuser
+[exit: 0]
+
+$ grep testuser /etc/passwd
+testuser:x:1000:1000:Test User,,,:/home/testuser:/bin/bash
+[exit: 0]
+
+$ grep testuser /etc/group
+testuser:x:1000:
+[exit: 0]
+
+$ getent shadow testuser | cut -c1-40
+testuser:$y$j9T$q6L/dJqrQxRyjOi.bmjZf1$h
+[exit: 0]
+
+$ ls -la /home/testuser
+total 20
+drwxr-x--- 2 testuser testuser 4096 Sep  4 17:12 .
+drwxr-xr-x 1 root     root     4096 Sep  4 17:12 ..
+-rw-r--r-- 1 testuser testuser  220 Sep  4 17:12 .bash_logout
+-rw-r--r-- 1 testuser testuser 3771 Sep  4 17:12 .bashrc
+-rw-r--r-- 1 testuser testuser  807 Sep  4 17:12 .profile
+[exit: 0]
+
+$ id testuser
+uid=1000(testuser) gid=1000(testuser) groups=1000(testuser)
+[exit: 0]
+
+$ su - testuser -c 'whoami; pwd; echo $SHELL'
+testuser
+/home/testuser
+/bin/bash
+[exit: 0]
+
+$ echo "=== CONTRAST: bare useradd ==="; useradd testuser2 && echo "useradd testuser2 done"
+=== CONTRAST: bare useradd ===
+useradd testuser2 done
+[exit: 0]
+
+$ grep testuser2 /etc/passwd
+testuser2:x:1001:1001::/home/testuser2:/bin/sh
+[exit: 0]
+
+$ ls /home/ | tr '
+' ' '; echo
+testuser 
+[exit: 0]
+
+$ passwd -S testuser2
+testuser2 L 09/04/2026 0 99999 7 -1
+[exit: 0]
+
+$ echo "=== the correct, script-safe useradd invocation ==="; useradd -m -s /bin/bash -c "Test User Three" -G sudo testuser3 && echo "useradd -m testuser3 done"
+=== the correct, script-safe useradd invocation ===
+useradd -m testuser3 done
+[exit: 0]
+
+$ grep testuser3 /etc/passwd
+testuser3:x:1002:1002:Test User Three:/home/testuser3:/bin/bash
+[exit: 0]
+
+$ ls -la /home/testuser3
+total 20
+drwxr-x--- 2 testuser3 testuser3 4096 Sep  4 17:12 .
+drwxr-xr-x 1 root      root      4096 Sep  4 17:12 ..
+-rw-r--r-- 1 testuser3 testuser3  220 Jan  6  2022 .bash_logout
+-rw-r--r-- 1 testuser3 testuser3 3771 Jan  6  2022 .bashrc
+-rw-r--r-- 1 testuser3 testuser3  807 Jan  6  2022 .profile
+[exit: 0]
+
+$ id testuser3
+uid=1002(testuser3) gid=1002(testuser3) groups=1002(testuser3),27(sudo)
+[exit: 0]
+
+$ deluser --remove-home testuser2
+Looking for files to backup/remove ...
+Removing user `testuser2' ...
+Warning: group `testuser2' has no more members.
+Done.
+[exit: 0]
+
+$ deluser --remove-home testuser3
+Looking for files to backup/remove ...
+Removing files ...
+Removing user `testuser3' ...
+Warning: group `testuser3' has no more members.
+Done.
+[exit: 0]
+
+$ cut -d: -f1 /etc/passwd | tail -5
+systemd-network
+systemd-resolve
+messagebus
+tcpdump
+testuser
+[exit: 0]
+
+############ TASK 3 : journalctl ############
+
+$ ps -p 1 -o comm=
+systemd
+[exit: 0]
+
+$ systemctl is-system-running
+running
+[exit: 0]
+
+$ journalctl --disk-usage
+Archived and active journals take up 16.0M in the file system.
+[exit: 0]
+
+$ systemctl enable --now nginx
+Synchronizing state of nginx.service with SysV service script with /lib/systemd/systemd-sysv-install.
+Executing: /lib/systemd/systemd-sysv-install enable nginx
+Created symlink /etc/systemd/system/multi-user.target.wants/nginx.service → /lib/systemd/system/nginx.service.
+[exit: 0]
+
+$ systemctl status nginx --no-pager | head -8
+● nginx.service - A high performance web server and a reverse proxy server
+     Loaded: loaded (/lib/systemd/system/nginx.service; enabled; vendor preset: enabled)
+     Active: active (running) since Fri 2026-09-04 17:12:35 UTC; 36ms ago
+       Docs: man:nginx(8)
+    Process: 562 ExecStartPre=/usr/sbin/nginx -t -q -g daemon on; master_process on; (code=exited, status=0/SUCCESS)
+    Process: 563 ExecStart=/usr/sbin/nginx -g daemon on; master_process on; (code=exited, status=0/SUCCESS)
+   Main PID: 564 (nginx)
+      Tasks: 16 (limit: 9563)
+[exit: 0]
+
+$ journalctl -u nginx --no-pager
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Starting A high performance web server and a reverse proxy server...
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Started A high performance web server and a reverse proxy server.
+[exit: 0]
+
+$ systemctl restart nginx && echo "nginx restarted"
+nginx restarted
+[exit: 0]
+
+$ curl -s localhost | head -4
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nginx!</title>
+[exit: 0]
+
+$ journalctl -u nginx --since "5 minutes ago" --no-pager | tail -12
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Starting A high performance web server and a reverse proxy server...
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Started A high performance web server and a reverse proxy server.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Stopping A high performance web server and a reverse proxy server...
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: nginx.service: Deactivated successfully.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Stopped A high performance web server and a reverse proxy server.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Starting A high performance web server and a reverse proxy server...
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Started A high performance web server and a reverse proxy server.
+[exit: 0]
+
+$ echo "=== DELIBERATELY BREAK THE CONFIG ==="; sed -i '1i this_is_invalid;' /etc/nginx/nginx.conf && head -2 /etc/nginx/nginx.conf
+=== DELIBERATELY BREAK THE CONFIG ===
+this_is_invalid;
+user www-data;
+[exit: 0]
+
+$ systemctl restart nginx || echo "restart FAILED as expected"
+Job for nginx.service failed because the control process exited with error code.
+See "systemctl status nginx.service" and "journalctl -xeu nginx.service" for details.
+restart FAILED as expected
+[exit: 0]
+
+$ journalctl -u nginx -n 20 --no-pager | tail -14
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Stopping A high performance web server and a reverse proxy server...
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: nginx.service: Deactivated successfully.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Stopped A high performance web server and a reverse proxy server.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Starting A high performance web server and a reverse proxy server...
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Started A high performance web server and a reverse proxy server.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Stopping A high performance web server and a reverse proxy server...
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: nginx.service: Deactivated successfully.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Stopped A high performance web server and a reverse proxy server.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Starting A high performance web server and a reverse proxy server...
+Sep 04 17:12:35 4f1eb9c1623d nginx[665]: nginx: [emerg] unknown directive "this_is_invalid" in /etc/nginx/nginx.conf:1
+Sep 04 17:12:35 4f1eb9c1623d nginx[665]: nginx: configuration file /etc/nginx/nginx.conf test failed
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: nginx.service: Control process exited, code=exited, status=1/FAILURE
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: nginx.service: Failed with result 'exit-code'.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Failed to start A high performance web server and a reverse proxy server.
+[exit: 0]
+
+$ journalctl -xe --no-pager | tail -20
+░░ Defined-By: systemd
+░░ Support: http://www.ubuntu.com/support
+░░ 
+░░ An ExecStartPre= process belonging to unit nginx.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: nginx.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: http://www.ubuntu.com/support
+░░ 
+░░ The unit nginx.service has entered the 'failed' state with result 'exit-code'.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Failed to start A high performance web server and a reverse proxy server.
+░░ Subject: A start job for unit nginx.service has failed
+░░ Defined-By: systemd
+░░ Support: http://www.ubuntu.com/support
+░░ 
+░░ A start job for unit nginx.service has finished with a failure.
+░░ 
+░░ The job identifier is 314 and the job result is failed.
+[exit: 0]
+
+$ echo "=== REPAIR ==="; sed -i '/this_is_invalid;/d' /etc/nginx/nginx.conf && head -2 /etc/nginx/nginx.conf
+=== REPAIR ===
+user www-data;
+worker_processes auto;
+[exit: 0]
+
+$ nginx -t
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+[exit: 0]
+
+$ systemctl restart nginx && systemctl is-active nginx
+active
+[exit: 0]
+
+$ journalctl -n 20 --no-pager | tail -10
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: nginx.service: Deactivated successfully.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Stopped A high performance web server and a reverse proxy server.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Starting A high performance web server and a reverse proxy server...
+Sep 04 17:12:35 4f1eb9c1623d nginx[665]: nginx: [emerg] unknown directive "this_is_invalid" in /etc/nginx/nginx.conf:1
+Sep 04 17:12:35 4f1eb9c1623d nginx[665]: nginx: configuration file /etc/nginx/nginx.conf test failed
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: nginx.service: Control process exited, code=exited, status=1/FAILURE
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: nginx.service: Failed with result 'exit-code'.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Failed to start A high performance web server and a reverse proxy server.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Starting A high performance web server and a reverse proxy server...
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Started A high performance web server and a reverse proxy server.
+[exit: 0]
+
+$ journalctl -r -n 10 --no-pager
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Started A high performance web server and a reverse proxy server.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Starting A high performance web server and a reverse proxy server...
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Failed to start A high performance web server and a reverse proxy server.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: nginx.service: Failed with result 'exit-code'.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: nginx.service: Control process exited, code=exited, status=1/FAILURE
+Sep 04 17:12:35 4f1eb9c1623d nginx[665]: nginx: configuration file /etc/nginx/nginx.conf test failed
+Sep 04 17:12:35 4f1eb9c1623d nginx[665]: nginx: [emerg] unknown directive "this_is_invalid" in /etc/nginx/nginx.conf:1
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Starting A high performance web server and a reverse proxy server...
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Stopped A high performance web server and a reverse proxy server.
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: nginx.service: Deactivated successfully.
+[exit: 0]
+
+$ journalctl -p err --no-pager | tail -10
+Sep 04 17:12:03 4f1eb9c1623d su[335]: pam_env(su-l:session): Unable to open env file: /etc/default/locale: No such file or directory
+Sep 04 17:12:35 4f1eb9c1623d systemd[1]: Failed to start A high performance web server and a reverse proxy server.
+[exit: 0]
+
+$ journalctl -u nginx -o json-pretty --no-pager | head -25
+{
+	"MESSAGE_ID" : "7d4958e842da4a758f6c1cdc7b36dcc5",
+	"INVOCATION_ID" : "67131c48b130462c87fe125002da9717",
+	"_CAP_EFFECTIVE" : "1ffffffffff",
+	"_SYSTEMD_SLICE" : "-.slice",
+	"CODE_FUNC" : "job_emit_start_message",
+	"TID" : "1",
+	"_PID" : "1",
+	"CODE_FILE" : "src/core/job.c",
+	"_COMM" : "systemd",
+	"__MONOTONIC_TIMESTAMP" : "581497011",
+	"_TRANSPORT" : "journal",
+	"_SOURCE_REALTIME_TIMESTAMP" : "1788541955242115",
+	"JOB_TYPE" : "start",
+	"_SYSTEMD_UNIT" : "init.scope",
+	"__REALTIME_TIMESTAMP" : "1788541955242129",
+	"__CURSOR" : "s=991a781d9e574cf6a9a57b7df94501f7;i=2c4;b=ab9ec45f4dff4d79b8de82c246075c65;m=22a8f0b3;t=65aab5fe87891;x=6c4d061dff3400c9",
+	"_CMDLINE" : "/sbin/init",
+	"_UID" : "0",
+	"_SYSTEMD_CGROUP" : "/init.scope",
+	"_EXE" : "/usr/lib/systemd/systemd",
+	"SYSLOG_IDENTIFIER" : "systemd",
+	"_BOOT_ID" : "ab9ec45f4dff4d79b8de82c246075c65",
+	"JOB_ID" : "232",
+	"UNIT" : "nginx.service",
+[exit: 0]
+
+$ journalctl -u nginx --no-pager > /root/nginx-journal.log && wc -l /root/nginx-journal.log
+18 /root/nginx-journal.log
+[exit: 0]
+
+############ TASK 4 : COMMAND CHEAT SHEET ############
+
+$ pwd; ls -lahi /etc | head
+/
+total 520K
+66018 drwxr-xr-x 1 root root   4.0K Sep  4 17:12 .
+66032 drwxr-xr-x 1 root root   4.0K Sep  4 17:10 ..
+10620 -rw------- 1 root root      0 Aug 10 14:52 .pwd.lock
+48786 drwxr-xr-x 3 root root   4.0K Sep  4 17:09 X11
+10621 -rw-r--r-- 1 root root   3.0K Aug 10 14:52 adduser.conf
+48820 drwxr-xr-x 1 root root   4.0K Sep  4 17:09 alternatives
+48840 drwxr-xr-x 3 root root   4.0K Sep  4 17:09 apparmor.d
+10629 drwxr-xr-x 8 root root   4.0K Aug 10 14:52 apt
+10647 -rw-r--r-- 1 root root   2.3K Jan  6  2022 bash.bashrc
+[exit: 0]
+
+$ cd /var/log && pwd && cd - && pwd
+/var/log
+/
+/
+[exit: 0]
+
+$ tree -L 2 /root
+/root
+|-- links-lab
+|   |-- broken -> /nonexistent
+|   |-- hardlink.txt
+|   |-- mydir
+|   `-- original.txt
+`-- nginx-journal.log
+
+2 directories, 4 files
+[exit: 0]
+
+$ stat /etc/hosts
+  File: /etc/hosts
+  Size: 172       	Blocks: 8          IO Block: 4096   regular file
+Device: fe01h/65025d	Inode: 66042       Links: 1
+Access: (0644/-rw-r--r--)  Uid: (    0/    root)   Gid: (    0/    root)
+Access: 2026-09-04 17:10:41.183195008 +0000
+Modify: 2026-09-04 17:10:41.223195008 +0000
+Change: 2026-09-04 17:10:41.223195008 +0000
+ Birth: 2026-09-04 17:10:41.183195008 +0000
+[exit: 0]
+
+$ file /bin/ls /etc/passwd
+/bin/ls:     ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux-aarch64.so.1, BuildID[sha1]=d9b7406a3403f7edfe14d332f0209536f7c31155, for GNU/Linux 3.7.0, stripped
+/etc/passwd: ASCII text
+[exit: 0]
+
+$ which bash; type cd
+/usr/bin/bash
+cd is a shell builtin
+[exit: 0]
+
+$ cd /root && touch a.txt b.txt && mkdir -p x/y/z && cp -rv x/ x-backup/
+'x/' -> 'x-backup/'
+'x/y' -> 'x-backup/y'
+'x/y/z' -> 'x-backup/y/z'
+[exit: 0]
+
+$ cd /root && mv a.txt renamed.txt && ls
+b.txt
+links-lab
+nginx-journal.log
+renamed.txt
+x
+x-backup
+[exit: 0]
+
+$ cd /root && rm -rf x-backup/ && ls
+b.txt
+links-lab
+nginx-journal.log
+renamed.txt
+x
+[exit: 0]
+
+$ find /etc -name "*.conf" -size +10k | head
+/etc/fonts/conf.avail/65-fonts-persian.conf
+/etc/fonts/conf.avail/30-metric-aliases.conf
+[exit: 0]
+
+$ du -sh /root/*
+0	/root/b.txt
+16K	/root/links-lab
+4.0K	/root/nginx-journal.log
+0	/root/renamed.txt
+12K	/root/x
+[exit: 0]
+
+$ df -hT
+Filesystem     Type     Size  Used Avail Use% Mounted on
+overlay        overlay  911G  4.2G  861G   1% /
+tmpfs          tmpfs     64M     0   64M   0% /dev
+shm            tmpfs     64M     0   64M   0% /dev/shm
+tmpfs          tmpfs    3.9G   32K  3.9G   1% /run
+tmpfs          tmpfs    3.9G     0  3.9G   0% /run/lock
+/dev/vda1      ext4     911G  4.2G  861G   1% /etc/hosts
+[exit: 0]
+
+$ head -5 /etc/services; echo "..."; tail -5 /etc/services
+head: cannot open '/etc/services' for reading: No such file or directory
+...
+tail: cannot open '/etc/services' for reading: No such file or directory
+[exit: 1]
+
+$ grep -rn "listen" /etc/nginx/nginx.conf | head
+73:#		listen     localhost:110;
+79:#		listen     localhost:143;
+[exit: 0]
+
+$ wc -l /etc/passwd
+24 /etc/passwd
+[exit: 0]
+
+$ cut -d: -f7 /etc/passwd | sort | uniq -c
+      2 /bin/bash
+      1 /bin/sync
+     21 /usr/sbin/nologin
+[exit: 0]
+
+$ ps aux | awk '{print $1, $11}' | head
+USER COMMAND
+root /sbin/init
+root /lib/systemd/systemd-journald
+message+ @dbus-daemon
+root /lib/systemd/systemd-logind
+root nginx:
+www-data nginx:
+www-data nginx:
+www-data nginx:
+www-data nginx:
+[exit: 0]
+
+$ sed -n '1,5p' /etc/passwd
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+sys:x:3:3:sys:/dev:/usr/sbin/nologin
+sync:x:4:65534:sync:/bin:/bin/sync
+[exit: 0]
+
+$ cd /root && diff renamed.txt b.txt || echo "(diff exit 1 = files differ)"
+[exit: 0]
+
+$ cd /root && chmod 750 renamed.txt && ls -l renamed.txt
+-rwxr-x--- 1 root root 0 Sep  4 17:13 renamed.txt
+[exit: 0]
+
+$ cd /root && chmod +x renamed.txt && ls -l renamed.txt
+-rwxr-x--x 1 root root 0 Sep  4 17:13 renamed.txt
+[exit: 0]
+
+$ cd /root && chown root:root renamed.txt && ls -l renamed.txt
+-rwxr-x--x 1 root root 0 Sep  4 17:13 renamed.txt
+[exit: 0]
+
+$ umask; id; groups; whoami
+0022
+uid=0(root) gid=0(root) groups=0(root)
+root
+root
+[exit: 0]
+
+$ ps aux --sort=-%mem | head -6
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root          23  0.0  0.1  39828 14332 ?        S<s  17:10   0:00 /lib/systemd/systemd-journald
+root           1  0.0  0.1  18704  9700 ?        Ss   17:10   0:00 /sbin/init
+root         345  0.0  0.0  15300  6848 ?        Ss   17:12   0:00 /lib/systemd/systemd-logind
+message+     343  0.0  0.0   7764  3752 ?        Ss   17:12   0:00 @dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only
+www-data     716  0.0  0.0  55404  3256 ?        S    17:12   0:00 nginx: worker process
+[exit: 0]
+
+$ top -b -n 1 | head -12
+top - 17:13:11 up 10 min,  0 users,  load average: 0.00, 0.08, 0.05
+Tasks:  23 total,   1 running,  22 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  0.0 us,  0.0 sy,  0.0 ni,100.0 id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st
+MiB Mem :   7933.5 total,   3305.0 free,    680.6 used,   3947.8 buff/cache
+MiB Swap:   1024.0 total,   1024.0 free,      0.0 used.   7053.7 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+      1 root      20   0   18704   9700   7480 S   0.0   0.1   0:00.08 systemd
+     23 root      19  -1   39828  14332  13388 S   0.0   0.2   0:00.01 systemd+
+    343 message+  20   0    7764   3752   3248 S   0.0   0.0   0:00.00 dbus-da+
+    345 root      20   0   15300   6848   5940 S   0.0   0.1   0:00.01 systemd+
+    715 root      20   0   55076   2288    688 S   0.0   0.0   0:00.00 nginx
+[exit: 0]
+
+$ sleep 300 & sleep 0.3; jobs; pkill -f "sleep 300" && echo "killed sleep 300"
+[1]+  Running                 sleep 300 &
+[exit: 143]
+
+$ systemctl list-units --type=service --state=running --no-pager | head
+  UNIT                     LOAD   ACTIVE SUB     DESCRIPTION
+  dbus.service             loaded active running D-Bus System Message Bus
+  nginx.service            loaded active running A high performance web server and a reverse proxy server
+  systemd-journald.service loaded active running Journal Service
+  systemd-logind.service   loaded active running User Login Management
+
+LOAD   = Reflects whether the unit definition was properly loaded.
+ACTIVE = The high-level unit activation state, i.e. generalization of SUB.
+SUB    = The low-level unit activation state, values depend on unit type.
+4 loaded units listed.
+[exit: 0]
+
+$ uname -a
+Linux 4f1eb9c1623d 7.0.12-linuxkit #1 SMP PREEMPT Fri Aug 14 16:27:59 UTC 2026 aarch64 aarch64 aarch64 GNU/Linux
+[exit: 0]
+
+$ uptime; free -h
+ 17:13:11 up 10 min,  0 users,  load average: 0.00, 0.08, 0.05
+               total        used        free      shared  buff/cache   available
+Mem:           7.7Gi       688Mi       3.2Gi       0.0Ki       3.9Gi       6.9Gi
+Swap:          1.0Gi          0B       1.0Gi
+[exit: 0]
+
+$ lsof -i :80 | head
+bash: line 1: lsof: command not found
+[exit: 0]
+
+$ cd /root && tar -czvf lab.tgz links-lab/ && ls -lh lab.tgz && tar -tzf lab.tgz | head
+links-lab/
+links-lab/broken
+links-lab/mydir/
+links-lab/original.txt
+links-lab/hardlink.txt
+-rw-r--r-- 1 root root 277 Sep  4 17:13 lab.tgz
+links-lab/
+links-lab/broken
+links-lab/mydir/
+links-lab/original.txt
+links-lab/hardlink.txt
+[exit: 0]
+
+$ apt list --installed 2>/dev/null | wc -l
+217
+[exit: 0]
+
+$ curl -sI https://github.com | head -3
+[exit: 0]

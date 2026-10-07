@@ -1,0 +1,533 @@
+############ PHASE 5 : SIX DOCKERISED APPS ############
+
+$ docker build -t nodejs-hello:v1 nodejs-app
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 264B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:20-alpine
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 88B done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 880B done
+#4 DONE 0.0s
+
+#5 [1/5] FROM docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293
+#5 resolve docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 done
+#5 DONE 0.0s
+
+#6 [2/5] WORKDIR /app
+#6 DONE 0.0s
+
+#7 [3/5] COPY package*.json ./
+#7 DONE 0.0s
+
+#8 [4/5] RUN npm install --omit=dev
+#8 1.617 
+#8 1.617 added 68 packages, and audited 69 packages in 2s
+#8 1.617 
+#8 1.617 15 packages are looking for funding
+#8 1.617   run `npm fund` for details
+#8 1.619 
+#8 1.619 3 moderate severity vulnerabilities
+#8 1.619 
+#8 1.619 To address all issues, run:
+#8 1.619   npm audit fix
+#8 1.619 
+#8 1.619 Run `npm audit` for details.
+#8 1.619 npm notice
+#8 1.619 npm notice New major version of npm available! 10.8.2 -> 12.0.2
+#8 1.619 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2
+#8 1.619 npm notice To update run: npm install -g npm@12.0.2
+#8 1.619 npm notice
+#8 DONE 1.6s
+
+#9 [5/5] COPY server.js ./
+#9 DONE 0.0s
+
+#10 exporting to image
+#10 exporting layers 0.1s done
+#10 exporting manifest sha256:fbf6dcfcdf2e5c59414af1dd4237f57585ad0d4c47879adcd0a33590e4a0a629 done
+#10 exporting config sha256:e2230a99d1ffd2ff5cdd6a7f7b72592281559e1ffe161f799e03dc3677f6a458 done
+#10 exporting attestation manifest sha256:8dc9c6ef49dbb1fd4a1bbee5401e8f956b1289c23c8d2a17ffffae103e27c48b done
+#10 exporting manifest list sha256:c23f308f92936b9cccc83b659caeab9c2f6ec2acff10d737dcd7a31a457fd607 done
+#10 naming to docker.io/library/nodejs-hello:v1 done
+#10 unpacking to docker.io/library/nodejs-hello:v1 0.1s done
+#10 DONE 0.3s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/6y0sj3x7b5aunclelpavdxscu
+[exit: 0]
+
+$ docker run -d --name nodejs-app -p 3000:3000 nodejs-hello:v1
+715b76cd11b7d22115b14b37806291af20737b69772d33aa7a4b08377134a2b4
+[exit: 0]
+
+$ docker logs nodejs-app 2>&1 | tail -5
+
+> nodejs-hello-docker@1.0.0 start
+> node server.js
+
+Node.js server running on port 3000
+[exit: 0]
+
+$ docker build -t python-hello:v1 python-app
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 255B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.11-slim
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 751B done
+#4 DONE 0.0s
+
+#5 [1/5] FROM docker.io/library/python:3.11-slim@sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41d6bab25604534
+#5 resolve docker.io/library/python:3.11-slim@sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41d6bab25604534 done
+#5 DONE 0.0s
+
+#6 [2/5] WORKDIR /app
+#6 DONE 0.0s
+
+#7 [3/5] COPY requirements.txt .
+#7 DONE 0.0s
+
+#8 [4/5] RUN pip install --no-cache-dir -r requirements.txt
+#8 0.636 Collecting flask==3.0.3 (from -r requirements.txt (line 1))
+#8 0.765   Downloading flask-3.0.3-py3-none-any.whl.metadata (3.2 kB)
+#8 0.800 Collecting Werkzeug>=3.0.0 (from flask==3.0.3->-r requirements.txt (line 1))
+#8 0.846   Downloading werkzeug-3.1.8-py3-none-any.whl.metadata (4.0 kB)
+#8 0.867 Collecting Jinja2>=3.1.2 (from flask==3.0.3->-r requirements.txt (line 1))
+#8 0.883   Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+#8 0.908 Collecting itsdangerous>=2.1.2 (from flask==3.0.3->-r requirements.txt (line 1))
+#8 0.924   Downloading itsdangerous-2.2.0-py3-none-any.whl.metadata (1.9 kB)
+#8 0.949 Collecting click>=8.1.3 (from flask==3.0.3->-r requirements.txt (line 1))
+#8 0.965   Downloading click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+#8 0.983 Collecting blinker>=1.6.2 (from flask==3.0.3->-r requirements.txt (line 1))
+#8 1.005   Downloading blinker-1.9.0-py3-none-any.whl.metadata (1.6 kB)
+#8 1.061 Collecting MarkupSafe>=2.0 (from Jinja2>=3.1.2->flask==3.0.3->-r requirements.txt (line 1))
+#8 1.077   Downloading markupsafe-3.0.3-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (2.7 kB)
+#8 1.096 Downloading flask-3.0.3-py3-none-any.whl (101 kB)
+#8 1.154    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 101.7/101.7 kB 4.6 MB/s eta 0:00:00
+#8 1.171 Downloading blinker-1.9.0-py3-none-any.whl (8.5 kB)
+#8 1.187 Downloading click-8.5.0-py3-none-any.whl (125 kB)
+#8 1.199    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 125.3/125.3 kB 11.4 MB/s eta 0:00:00
+#8 1.216 Downloading itsdangerous-2.2.0-py3-none-any.whl (16 kB)
+#8 1.238 Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+#8 1.243    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 134.9/134.9 kB 35.6 MB/s eta 0:00:00
+#8 1.261 Downloading werkzeug-3.1.8-py3-none-any.whl (226 kB)
+#8 1.268    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 226.5/226.5 kB 46.8 MB/s eta 0:00:00
+#8 1.285 Downloading markupsafe-3.0.3-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (24 kB)
+#8 1.320 Installing collected packages: MarkupSafe, itsdangerous, click, blinker, Werkzeug, Jinja2, flask
+#8 1.456 Successfully installed Jinja2-3.1.6 MarkupSafe-3.0.3 Werkzeug-3.1.8 blinker-1.9.0 click-8.5.0 flask-3.0.3 itsdangerous-2.2.0
+#8 1.456 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+#8 1.541 
+#8 1.541 [notice] A new release of pip is available: 24.0 -> 26.2.1
+#8 1.541 [notice] To update, run: pip install --upgrade pip
+#8 DONE 1.6s
+
+#9 [5/5] COPY app.py .
+#9 DONE 0.0s
+
+#10 exporting to image
+#10 exporting layers 0.1s done
+#10 exporting manifest sha256:5bd4eb6be393339dee2242d92759f617bce8276cf1325134c21dd34c4947ebce done
+#10 exporting config sha256:6e9380be20add7ab3e13173a4252886f8df1ea6f5bbf8746ea9efec216190237 done
+#10 exporting attestation manifest sha256:f9fd3b9d97958efa527fb8fec90e857727fbc0f15a889cf39452ac6ff5bc1393 done
+#10 exporting manifest list sha256:0b9e658e9a124784d039c0b843aa42c2505e8f03a38be1503d90bd5be93a0ad1 done
+#10 naming to docker.io/library/python-hello:v1 done
+#10 unpacking to docker.io/library/python-hello:v1 0.0s done
+#10 DONE 0.2s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/5xfd05r8blib2fr04w0xeblet
+[exit: 0]
+
+$ docker run -d --name python-app -p 5001:5000 python-hello:v1
+37d21930d01ab783316a06fd4d458b95db34e0be35eea53b63709fc3af17ba88
+[exit: 0]
+
+$ docker logs python-app 2>&1 | tail -5
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://172.17.0.4:5000
+[33mPress CTRL+C to quit[0m
+[exit: 0]
+
+$ docker build -t java-hello:v1 java-app
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 361B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/eclipse-temurin:21-jdk-alpine
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/eclipse-temurin:21-jre-alpine
+#3 DONE 0.0s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 1.34kB done
+#5 DONE 0.0s
+
+#6 [stage-1 1/3] FROM docker.io/library/eclipse-temurin:21-jre-alpine@sha256:974b08960c5d96694c780e65b2d5705268ab1e1ca1a0dd0caf4ba6c3fe34d699
+#6 resolve docker.io/library/eclipse-temurin:21-jre-alpine@sha256:974b08960c5d96694c780e65b2d5705268ab1e1ca1a0dd0caf4ba6c3fe34d699 done
+#6 DONE 0.0s
+
+#7 [build 1/4] FROM docker.io/library/eclipse-temurin:21-jdk-alpine@sha256:6ea5548706b60ac0a602eaf48af74792cbab012d90e811ca8db6184b16b5c3d6
+#7 resolve docker.io/library/eclipse-temurin:21-jdk-alpine@sha256:6ea5548706b60ac0a602eaf48af74792cbab012d90e811ca8db6184b16b5c3d6 done
+#7 DONE 0.0s
+
+#8 [stage-1 2/3] WORKDIR /app
+#8 DONE 0.0s
+
+#9 [build 2/4] WORKDIR /src
+#9 DONE 0.0s
+
+#10 [build 3/4] COPY App.java .
+#10 DONE 0.0s
+
+#11 [build 4/4] RUN javac App.java
+#11 DONE 0.3s
+
+#12 [stage-1 3/3] COPY --from=build /src/*.class ./
+#12 DONE 0.0s
+
+#13 exporting to image
+#13 exporting layers 0.0s done
+#13 exporting manifest sha256:8768b67311bf1fe586b5619c43295721c0d231a30640b4c230f95d35abfa9aad done
+#13 exporting config sha256:bf4d20b9ba9467c9960c40b59c596ef23f41c5dcc87cc77a2e4a91530fd3add8 done
+#13 exporting attestation manifest sha256:16e2ee2cb48a7bfebfe49f87652f66a5efa7795ab5b8bdbf8f6431a220d594d6 done
+#13 exporting manifest list sha256:7d8685eb57b866e030c0c70fe9bdcb6a83af52711f848544390630575c337c8e done
+#13 naming to docker.io/library/java-hello:v1 done
+#13 unpacking to docker.io/library/java-hello:v1 done
+#13 DONE 0.1s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/jvsyvjv7v7gmlb1m9e6uzl2vb
+[exit: 0]
+
+$ docker run -d --name java-app -p 8081:8080 java-hello:v1
+95e5499e18d6576ab0d5ccf9e5eae3c58442ee2702b9442562e9d47092c1b2da
+[exit: 0]
+
+$ docker logs java-app 2>&1 | tail -5
+Java server running on port 8080
+[exit: 0]
+
+$ docker build -t apache-hello:v1 Apache-app
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 181B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/httpd:2.4
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 372B done
+#4 DONE 0.0s
+
+#5 [1/2] FROM docker.io/library/httpd:2.4@sha256:979c38c2228d28c2edfd45c6e27dcee1c7b4a101a5526721ae8ece454e89e99e
+#5 resolve docker.io/library/httpd:2.4@sha256:979c38c2228d28c2edfd45c6e27dcee1c7b4a101a5526721ae8ece454e89e99e done
+#5 DONE 0.0s
+
+#6 [2/2] COPY index.html /usr/local/apache2/htdocs/index.html
+#6 DONE 0.0s
+
+#7 exporting to image
+#7 exporting layers 0.0s done
+#7 exporting manifest sha256:97a54d168351e96624f929189971ec66bcf559e218070a49770f1cc156c508f4 done
+#7 exporting config sha256:1b7280d607439bc4bd0bd89820f32b02c3471fecb4bca0de053393bf3bf76368 done
+#7 exporting attestation manifest sha256:5c898c803163a1d2cde9be3d08433a1120c461b8aa3c4a5757c2beac3a49b27d done
+#7 exporting manifest list sha256:690763dc6a7ac958111a53dedd92d8199bcf5e369389759fa347bfff93604346 done
+#7 naming to docker.io/library/apache-hello:v1 done
+#7 unpacking to docker.io/library/apache-hello:v1 done
+#7 DONE 0.0s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/i4s32s6ck34rgp7v11rlv07n1
+[exit: 0]
+
+$ docker run -d --name apache-app -p 8082:80 apache-hello:v1
+0e596c8249450e4fe6a1568eff999511757920a7966bae7deb6bbe5833e5f8f5
+[exit: 0]
+
+$ docker logs apache-app 2>&1 | tail -5
+AH00558: httpd: Could not reliably determine the server's fully qualified domain name, using 172.17.0.6. Set the 'ServerName' directive globally to suppress this message
+AH00558: httpd: Could not reliably determine the server's fully qualified domain name, using 172.17.0.6. Set the 'ServerName' directive globally to suppress this message
+[Fri Sep 04 17:27:57.410590 2026] [mpm_event:notice] [pid 1:tid 1] AH00489: Apache/2.4.68 (Unix) configured -- resuming normal operations
+[Fri Sep 04 17:27:57.410682 2026] [core:notice] [pid 1:tid 1] AH00094: Command line: 'httpd -D FOREGROUND'
+[exit: 0]
+
+$ docker build -t react-hello:v1 React-app
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 395B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:20-alpine
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/nginx:alpine
+#3 DONE 0.0s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 75B done
+#4 DONE 0.0s
+
+#5 [build 1/6] FROM docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293
+#5 resolve docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 1.61kB done
+#6 DONE 0.0s
+
+#7 [build 2/6] WORKDIR /app
+#7 CACHED
+
+#8 [build 3/6] COPY package*.json ./
+#8 DONE 0.0s
+
+#9 [stage-1 1/2] FROM docker.io/library/nginx:alpine@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3
+#9 resolve docker.io/library/nginx:alpine@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3 done
+#9 DONE 0.0s
+
+#10 [build 4/6] RUN npm install
+#10 11.78 
+#10 11.78 added 62 packages, and audited 63 packages in 12s
+#10 11.78 
+#10 11.78 7 packages are looking for funding
+#10 11.78   run `npm fund` for details
+#10 11.79 
+#10 11.79 2 vulnerabilities (1 moderate, 1 high)
+#10 11.79 
+#10 11.79 To address all issues (including breaking changes), run:
+#10 11.79   npm audit fix --force
+#10 11.79 
+#10 11.79 Run `npm audit` for details.
+#10 11.79 npm notice
+#10 11.79 npm notice New major version of npm available! 10.8.2 -> 12.0.2
+#10 11.79 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2
+#10 11.79 npm notice To update run: npm install -g npm@12.0.2
+#10 11.79 npm notice
+#10 DONE 11.9s
+
+#11 [build 5/6] COPY . .
+#11 DONE 0.0s
+
+#12 [build 6/6] RUN npm run build          # Vite writes to /app/dist
+#12 0.117 
+#12 0.117 > react-hello-docker@1.0.0 build
+#12 0.117 > vite build
+#12 0.117 
+#12 0.205 vite v5.4.21 building for production...
+#12 0.226 transforming...
+#12 0.501 ✓ 30 modules transformed.
+#12 0.537 rendering chunks...
+#12 0.539 computing gzip size...
+#12 0.542 dist/index.html                  0.33 kB │ gzip:  0.24 kB
+#12 0.542 dist/assets/index-DqWUiq_Y.js  142.86 kB │ gzip: 45.92 kB
+#12 0.542 ✓ built in 326ms
+#12 DONE 0.6s
+
+#13 [stage-1 2/2] COPY --from=build /app/dist /usr/share/nginx/html
+#13 DONE 0.0s
+
+#14 exporting to image
+#14 exporting layers 0.0s done
+#14 exporting manifest sha256:77cd748391cd30b216dc06e27431f5c67ecb60f6b53405f8a5f0e1d7913739f2 done
+#14 exporting config sha256:195cde0a1fb59e99131a994e9e4d8cd84be21ba7c0d2a0d3bff614e597d9e582
+#14 exporting config sha256:195cde0a1fb59e99131a994e9e4d8cd84be21ba7c0d2a0d3bff614e597d9e582 done
+#14 exporting attestation manifest sha256:8bb7145e6c536120f01ab38c4e7a183dc2a252479dc79316d7545714b3bcc164 done
+#14 exporting manifest list sha256:73bee5865e4aa91c01ac41a3fd610d99cc0f713f480f4548096db19d24070414 done
+#14 naming to docker.io/library/react-hello:v1 done
+#14 unpacking to docker.io/library/react-hello:v1 done
+#14 DONE 0.1s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/u8m4v9lhwor2adfea063ik565
+[exit: 0]
+
+$ docker run -d --name react-app -p 3001:80 react-hello:v1
+48548c7ad659df66727bf696c4a6988a0c9bb4e1deb7ccc54923356cc9bece51
+[exit: 0]
+
+$ docker logs react-app 2>&1 | tail -5
+2026/09/04 17:28:13 [notice] 1#1: start worker process 40
+2026/09/04 17:28:13 [notice] 1#1: start worker process 41
+2026/09/04 17:28:13 [notice] 1#1: start worker process 42
+2026/09/04 17:28:13 [notice] 1#1: start worker process 43
+2026/09/04 17:28:13 [notice] 1#1: start worker process 44
+[exit: 0]
+
+$ docker build -t nginx-hello:v1 nginx-app
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 220B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/nginx:alpine
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 376B done
+#4 DONE 0.0s
+
+#5 [1/2] FROM docker.io/library/nginx:alpine@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3
+#5 resolve docker.io/library/nginx:alpine@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3 done
+#5 CACHED
+
+#6 [2/2] COPY index.html /usr/share/nginx/html/index.html
+#6 DONE 0.0s
+
+#7 exporting to image
+#7 exporting layers 0.0s done
+#7 exporting manifest sha256:87269e5f5aba176a5af716e10de53de4bd769e1ad9bf46d81017efc01a147231 done
+#7 exporting config sha256:4783dd0cc5f185921862be40c117f1f69207af89bce907b4b9a18f11ee5d5692 done
+#7 exporting attestation manifest sha256:695c7f2dde4c815d4b0ff50b57fa8f572ed1adffa3c1bcb337e0bc969196d522 done
+#7 exporting manifest list sha256:5dca30697a74745e328912a6a6723690cd6c285c289f304225ea6553bcb18b5b done
+#7 naming to docker.io/library/nginx-hello:v1 done
+#7 unpacking to docker.io/library/nginx-hello:v1 done
+#7 DONE 0.0s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/uy4ojml8kgtv5idkucx19px8l
+[exit: 0]
+
+$ docker run -d --name nginx-app -p 8083:80 nginx-hello:v1
+dc5bf8000a745823a9cc7c76f886ccf43dc96c2915044319ab28f13d7a3be9a0
+[exit: 0]
+
+$ docker logs nginx-app 2>&1 | tail -5
+2026/09/04 17:28:16 [notice] 1#1: start worker process 40
+2026/09/04 17:28:16 [notice] 1#1: start worker process 41
+2026/09/04 17:28:16 [notice] 1#1: start worker process 42
+2026/09/04 17:28:16 [notice] 1#1: start worker process 43
+2026/09/04 17:28:16 [notice] 1#1: start worker process 44
+[exit: 0]
+
+$ docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
+NAMES        IMAGE             STATUS          PORTS
+nginx-app    nginx-hello:v1    Up 3 seconds    0.0.0.0:8083->80/tcp, [::]:8083->80/tcp
+react-app    react-hello:v1    Up 6 seconds    0.0.0.0:3001->80/tcp, [::]:3001->80/tcp
+apache-app   apache-hello:v1   Up 22 seconds   0.0.0.0:8082->80/tcp, [::]:8082->80/tcp
+java-app     java-hello:v1     Up 26 seconds   0.0.0.0:8081->8080/tcp, [::]:8081->8080/tcp
+python-app   python-hello:v1   Up 29 seconds   0.0.0.0:5001->5000/tcp, [::]:5001->5000/tcp
+nodejs-app   nodejs-hello:v1   Up 35 seconds   0.0.0.0:3000->3000/tcp, [::]:3000->3000/tcp
+linux-lab    linux-lab:v1      Up 17 minutes   
+[exit: 0]
+
+$ docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.Size}}' | grep -E 'REPOSITORY|hello'
+REPOSITORY        TAG             SIZE
+nginx-hello       v1              102MB
+react-hello       v1              102MB
+apache-hello      v1              205MB
+java-hello        v1              286MB
+python-hello      v1              231MB
+nodejs-hello      v1              210MB
+[exit: 0]
+############ HTTP VERIFICATION ############
+
+$ printf 'port %-5s -> ' 3000; curl -s --max-time 10 localhost:3000 | grep -o 'Hello World[^<]*' || echo 'NO RESPONSE'
+port 3000  -> Hello World from Node.js + Docker!
+[exit: 0]
+
+$ printf 'port %-5s -> ' 5001; curl -s --max-time 10 localhost:5001 | grep -o 'Hello World[^<]*' || echo 'NO RESPONSE'
+port 5001  -> Hello World from Python + Docker!
+[exit: 0]
+
+$ printf 'port %-5s -> ' 8081; curl -s --max-time 10 localhost:8081 | grep -o 'Hello World[^<]*' || echo 'NO RESPONSE'
+port 8081  -> Hello World from Java + Docker!
+[exit: 0]
+
+$ printf 'port %-5s -> ' 8082; curl -s --max-time 10 localhost:8082 | grep -o 'Hello World[^<]*' || echo 'NO RESPONSE'
+port 8082  -> Hello World from Apache + Docker!
+[exit: 0]
+
+$ printf 'port %-5s -> ' 3001; curl -s --max-time 10 localhost:3001 | grep -o 'Hello World[^<]*' || echo 'NO RESPONSE'
+port 3001  -> NO RESPONSE
+[exit: 0]
+
+$ printf 'port %-5s -> ' 8083; curl -s --max-time 10 localhost:8083 | grep -o 'Hello World[^<]*' || echo 'NO RESPONSE'
+port 8083  -> Hello World from Nginx + Docker!
+[exit: 0]
+############ JS-AWARE VERIFICATION OF THE REACT APP ############
+
+$ chrome --headless --dump-dom http://localhost:3001   # curl cannot execute JS; a browser can
+<div id="root"><div style="font-family: sans-serif; text-align: center; padding-top: 60px;"><h1>Hello World from React + Docker!</h1><p>Built with Vite, served by Nginx from a multi-stage image</p></div></div>
+[exit: 0]
+############ CONTAINER STARTUP LOGS (all six) ############
+
+$ docker logs nodejs-app 2>&1 | head -6
+
+> nodejs-hello-docker@1.0.0 start
+> node server.js
+
+Node.js server running on port 3000
+[exit: 0]
+
+$ docker logs python-app 2>&1 | head -6
+ * Serving Flask app 'app'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://172.17.0.4:5000
+[exit: 0]
+
+$ docker logs java-app 2>&1 | head -6
+Java server running on port 8080
+[exit: 0]
+
+$ docker logs apache-app 2>&1 | head -6
+AH00558: httpd: Could not reliably determine the server's fully qualified domain name, using 172.17.0.6. Set the 'ServerName' directive globally to suppress this message
+AH00558: httpd: Could not reliably determine the server's fully qualified domain name, using 172.17.0.6. Set the 'ServerName' directive globally to suppress this message
+[Fri Sep 04 17:27:57.410590 2026] [mpm_event:notice] [pid 1:tid 1] AH00489: Apache/2.4.68 (Unix) configured -- resuming normal operations
+[Fri Sep 04 17:27:57.410682 2026] [core:notice] [pid 1:tid 1] AH00094: Command line: 'httpd -D FOREGROUND'
+192.168.65.1 - - [04/Sep/2026:17:28:31 +0000] "GET / HTTP/1.1" 200 333
+192.168.65.1 - - [04/Sep/2026:17:29:14 +0000] "GET / HTTP/1.1" 200 333
+[exit: 0]
+
+$ docker logs react-app 2>&1 | head -6
+/docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+/docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+10-listen-on-ipv6-by-default.sh: info: Getting the checksum of /etc/nginx/conf.d/default.conf
+10-listen-on-ipv6-by-default.sh: info: Enabled listen on IPv6 in /etc/nginx/conf.d/default.conf
+/docker-entrypoint.sh: Sourcing /docker-entrypoint.d/15-local-resolvers.envsh
+[exit: 0]
+
+$ docker logs nginx-app 2>&1 | head -6
+/docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+/docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+10-listen-on-ipv6-by-default.sh: info: Getting the checksum of /etc/nginx/conf.d/default.conf
+10-listen-on-ipv6-by-default.sh: info: Enabled listen on IPv6 in /etc/nginx/conf.d/default.conf
+/docker-entrypoint.sh: Sourcing /docker-entrypoint.d/15-local-resolvers.envsh
+[exit: 0]

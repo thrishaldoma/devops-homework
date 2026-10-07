@@ -1,0 +1,30 @@
+# The Ingress RESOURCE is just an API object - data, with no behaviour of its own.
+$ kubectl api-resources | grep -i ingress
+ingressclasses                                   networking.k8s.io/v1              false        IngressClass
+ingresses                           ing          networking.k8s.io/v1              true         Ingress
+
+$ kubectl get ingress
+NAME                 CLASS   HOSTS                                  ADDRESS        PORTS     AGE
+campus-ingress-tls   nginx   portal.campus.local,api.campus.local   192.168.49.2   80, 443   86s
+yatri-ingress        nginx   yatri.local                            192.168.49.2   80        4m11s
+
+# 
+# The Ingress CONTROLLER is the running reverse proxy that reads those objects
+# and turns them into actual nginx configuration:
+$ kubectl get deploy -n ingress-nginx
+NAME                       READY   UP-TO-DATE   AVAILABLE   AGE
+ingress-nginx-controller   1/1     1            1           49m
+
+# PROOF - our Ingress objects were compiled into the controller's live nginx.conf:
+$ kubectl exec -n ingress-nginx deploy/ingress-nginx-controller -- grep -E 'server_name \"(yatri|portal|api)' /etc/nginx/nginx.conf
+		server_name "api.campus.local" ;
+		server_name "portal.campus.local" ;
+		server_name "yatri.local" ;
+
+$ kubectl exec -n ingress-nginx deploy/ingress-nginx-controller -- grep -E 'set \$ingress_name' /etc/nginx/nginx.conf | sort -u
+			set $ingress_name   "";
+			set $ingress_name   "campus-ingress-tls";
+			set $ingress_name   "yatri-ingress";
+
+# Delete the controller and the Ingress objects still exist - but nothing routes.
+# Delete the Ingress objects and the controller keeps running - with no rules.

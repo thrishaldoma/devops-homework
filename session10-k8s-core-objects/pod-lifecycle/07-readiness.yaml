@@ -1,0 +1,19 @@
+# Readiness probe - proves Running != Ready. The container is up immediately
+# but only reports Ready once /tmp/ready appears (~25s), so the Service
+# keeps it out of its Endpoints until then.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lifecycle-readiness
+  labels:
+    app: readiness-demo
+spec:
+  containers:
+    - name: app
+      image: busybox:1.36
+      command: ["/bin/sh", "-c", "echo 'booting'; sleep 25; touch /tmp/ready; echo 'ready'; sleep 3600"]
+      readinessProbe:
+        exec:
+          command: ["cat", "/tmp/ready"]
+        initialDelaySeconds: 5
+        periodSeconds: 5

@@ -1,0 +1,56 @@
+# ===== 1. generate a self-signed certificate (LibreSSL on macOS) =====
+$ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout tls.key -out tls.crt \
+    -subj "/CN=campus.local/O=CampusDevOps" \
+    -addext "subjectAltName=DNS:campus.local,DNS:portal.campus.local,DNS:api.campus.local"
+$ openssl x509 -in /private/tmp/claude-501/-Users-thrishaldoma-devops-homework/ea0b01bb-3b93-47f3-aebe-7e40c2d20efb/scratchpad/tls.crt -noout -subject -dates
+subject= /CN=campus.local/O=CampusDevOps
+notBefore=Sep 18 06:53:39 2026 GMT
+notAfter=Sep 18 06:53:39 2027 GMT
+
+$ openssl x509 -in /private/tmp/claude-501/-Users-thrishaldoma-devops-homework/ea0b01bb-3b93-47f3-aebe-7e40c2d20efb/scratchpad/tls.crt -noout -text | grep -A 2 -i 'subject alternative'
+            X509v3 Subject Alternative Name: 
+                DNS:campus.local, DNS:portal.campus.local, DNS:api.campus.local
+    Signature Algorithm: sha256WithRSAEncryption
+
+# ===== 2. store the keypair in a kubernetes.io/tls secret =====
+# (the .crt/.key files stay OUT of the repo - a private key must never be committed)
+$ kubectl create secret tls campus-tls-cert --cert=tls.crt --key=tls.key
+secret/campus-tls-cert created
+
+$ kubectl get secret campus-tls-cert
+NAME              TYPE                DATA   AGE
+campus-tls-cert   kubernetes.io/tls   2      35s
+
+# type kubernetes.io/tls, holding exactly two keys:
+$ kubectl describe secret campus-tls-cert | tail -5
+
+Data
+====
+tls.crt:  1147 bytes
+tls.key:  1704 bytes
+
+# ===== 3. bind the secret to the Ingress via spec.tls =====
+$ grep -A 6 'tls:' session-12-ingress-configmaps-secrets/03-ingress/ingress-tls.yaml | head -7
+  tls:
+    - hosts:
+        - portal.campus.local
+        - api.campus.local
+      secretName: campus-tls-cert    # kubernetes.io/tls secret holding cert + key
+  rules:
+    # ---- virtual host 1: the portal -> frontend ----
+
+$ kubectl get ingress campus-ingress-tls
+NAME                 CLASS   HOSTS                                  ADDRESS        PORTS     AGE
+campus-ingress-tls   nginx   portal.campus.local,api.campus.local   192.168.49.2   80, 443   35s
+
+# ===== 4. verify the TLS handshake on port 443 =====
+$ curl -k -v --resolve portal.campus.local:18443:127.0.0.1 https://portal.campus.local:18443/ 2>&1 | grep -E 'subject:|issuer:|SSL connection|TLSv|^< HTTP' | head -8
+* SSL connection using TLSv1.3 / AEAD-AES256-GCM-SHA384 / [blank] / UNDEF
+*  subject: CN=campus.local; O=CampusDevOps
+*  issuer: CN=campus.local; O=CampusDevOps
+< HTTP/2 200 
+
+$ curl -sk --resolve portal.campus.local:18443:127.0.0.1 https://portal.campus.local:18443/ | grep -i '<title>'
+<title>Welcome to nginx!</title>
+

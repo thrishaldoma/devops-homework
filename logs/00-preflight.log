@@ -1,0 +1,50 @@
+
+$ echo hello-from-run.sh
+hello-from-run.sh
+[exit: 0]
+
+$ sw_vers
+ProductName:		macOS
+ProductVersion:		26.6.2
+BuildVersion:		25G83
+[exit: 0]
+
+$ uname -m
+arm64
+[exit: 0]
+
+$ command -v docker || echo 'docker: NOT INSTALLED on this host'
+docker: NOT INSTALLED on this host
+[exit: 0]
+
+$ git --version
+git version 2.50.1 (Apple Git-155)
+[exit: 0]
+
+$ node --version; npm --version; python3 --version
+v22.23.2
+10.9.8
+Python 3.9.6
+[exit: 0]
+
+$ for p in 80 3000 3001 5000 5001 8080 8081 8082 8083 8090 8091; do if lsof -nP -iTCP:$p -sTCP:LISTEN >/dev/null 2>&1; then echo "port $p: IN USE"; else echo "port $p: free"; fi; done
+port 80: free
+port 3000: IN USE
+port 3001: free
+port 5000: free
+port 5001: free
+port 8080: free
+port 8081: free
+port 8082: free
+port 8083: free
+port 8090: free
+port 8091: free
+[exit: 0]
+
+$ CHROME='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'; [ -x "$CHROME" ] && echo 'chrome: OK' || echo 'chrome: MISSING'
+chrome: OK
+[exit: 0]
+
+$ command -v screencapture >/dev/null && echo 'screencapture: OK'
+screencapture: OK
+[exit: 0]

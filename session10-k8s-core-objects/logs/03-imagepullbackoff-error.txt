@@ -1,0 +1,26 @@
+$ kubectl apply -f session10-k8s-core-objects/pod-lifecycle/06-imagepullbackoff.yaml
+pod/lifecycle-image-error created
+
+$ kubectl get pod lifecycle-image-error
+NAME                    READY   STATUS         RESTARTS   AGE
+lifecycle-image-error   0/1     ErrImagePull   0          12s
+
+# after the first pull attempt fails, the kubelet backs off:
+$ kubectl get pod lifecycle-image-error
+NAME                    READY   STATUS             RESTARTS   AGE
+lifecycle-image-error   0/1     ImagePullBackOff   0          32s
+
+$ kubectl describe pod lifecycle-image-error | grep -A 10 'Events:'
+Events:
+  Type     Reason     Age                From               Message
+  ----     ------     ----               ----               -------
+  Normal   Scheduled  32s                default-scheduler  Successfully assigned default/lifecycle-image-error to minikube-m02
+  Normal   BackOff    26s                kubelet            spec.containers{broken}: Back-off pulling image "nginx:this-tag-does-not-exist-9999"
+  Warning  Failed     26s                kubelet            spec.containers{broken}: Error: ImagePullBackOff
+  Normal   Pulling    15s (x2 over 32s)  kubelet            spec.containers{broken}: Pulling image "nginx:this-tag-does-not-exist-9999"
+  Warning  Failed     13s (x2 over 26s)  kubelet            spec.containers{broken}: Failed to pull image "nginx:this-tag-does-not-exist-9999": rpc error: code = NotFound desc = failed to pull and unpack image "docker.io/library/nginx:this-tag-does-not-exist-9999": failed to resolve reference "docker.io/library/nginx:this-tag-does-not-exist-9999": docker.io/library/nginx:this-tag-does-not-exist-9999: not found
+  Warning  Failed     13s (x2 over 26s)  kubelet            spec.containers{broken}: Error: ErrImagePull
+
+$ kubectl delete -f session10-k8s-core-objects/pod-lifecycle/06-imagepullbackoff.yaml
+pod "lifecycle-image-error" deleted from default namespace
+
