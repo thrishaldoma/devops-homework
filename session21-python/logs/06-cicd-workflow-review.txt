@@ -1,0 +1,83 @@
+# M5 / M6 - the GitHub Actions pipeline, reviewed statically. It was never
+# executed, for the reason given in Finding 1.
+# 
+# FINDING 1 - the workflow sits in a nested directory, so GitHub never runs it.
+$ find . -name 'ci-cd.yml'
+./.github/workflows/ci-cd.yml
+
+$ ls /Users/thrishaldoma/devops-homework/.github/workflows/
+cd.yml
+ci.yml
+devsecops.yml
+
+# GitHub only executes workflows found in .github/workflows/ at the
+# REPOSITORY root. A .github/workflows/ inside a subdirectory is inert.
+# M5 asks for a run URL showing a green pipeline, which this cannot produce
+# while it stays where it is.
+# 
+# FINDING 2 - the Trivy action is pinned to a tag that does not exist.
+$ grep -n 'trivy-action' .github/workflows/ci-cd.yml
+43:        uses: aquasecurity/trivy-action@0.30.0
+50:        uses: aquasecurity/trivy-action@0.30.0
+
+# Asking GitHub for that ref directly: the unprefixed tag returns nothing,
+# the v-prefixed one resolves, and every published tag is v-prefixed.
+$ gh api repos/aquasecurity/trivy-action/git/matching-refs/tags/0.30.0 --jq '.[].ref' 2>/dev/null; echo "  ^ empty: there is no tag '0.30.0'"
+  ^ empty: there is no tag '0.30.0'
+
+$ gh api repos/aquasecurity/trivy-action/git/matching-refs/tags/v0.30.0 --jq '.[].ref'
+refs/tags/v0.30.0
+
+$ gh api repos/aquasecurity/trivy-action/tags --jq '.[0:5][].name' | tr '\n' ' '
+v0.36.0 v0.35.0 v0.34.0 v0.33.1 v0.33.0 
+# Both scan steps would fail with 'Unable to resolve action'.
+# 
+# FINDING 3 - third-party actions are pinned by tag rather than commit SHA.
+$ grep -nE 'uses: (aquasecurity|azure|docker)/' .github/workflows/ci-cd.yml
+33:      - uses: docker/login-action@v3
+43:        uses: aquasecurity/trivy-action@0.30.0
+50:        uses: aquasecurity/trivy-action@0.30.0
+67:      - uses: azure/setup-helm@v4
+
+# A tag is mutable. Whoever controls that repository can repoint it at new
+# code, which then runs inside this workflow with its token. Pinning to a
+# full 40-character commit SHA removes that. (actions/* are first-party and
+# conventionally allowed to float on a major version.)
+# 
+# FINDING 4 - the image name is built from the owner without lowercasing.
+$ grep -n 'repository_owner' .github/workflows/ci-cd.yml | head -4
+40:          docker build -t ghcr.io/${{ github.repository_owner }}/taskboard-backend:${{ github.sha }} ./backend
+41:          docker build -t ghcr.io/${{ github.repository_owner }}/taskboard-frontend:${{ github.sha }} ./frontend
+45:          image-ref: ghcr.io/${{ github.repository_owner }}/taskboard-backend:${{ github.sha }}
+52:          image-ref: ghcr.io/${{ github.repository_owner }}/taskboard-frontend:${{ github.sha }}
+
+# ghcr.io requires an all-lowercase path, but github.repository_owner keeps
+# the account's own capitalisation. For an owner such as THRISHAL12345 the
+# build fails at tag parsing, before the registry is ever contacted. This is
+# the same defect that was fixed in this repository's own devsecops.yml.
+# 
+# FINDING 5 - the deploy job depends on a secret that does not exist.
+$ grep -n 'KUBE_CONFIG_DATA' .github/workflows/ci-cd.yml
+69:        env: {KUBE_CONFIG_DATA: '${{ secrets.KUBE_CONFIG_DATA }}'}
+72:          echo "$KUBE_CONFIG_DATA" | base64 -d > ~/.kube/config
+
+# With no such secret the kubeconfig written is empty and the Helm step
+# fails. There is also no cluster reachable from a GitHub-hosted runner here.
+# 
+# --- what IS right about this workflow ---
+# The job order is correct (test -> build/scan/push -> deploy), the images
+# are tagged with the commit SHA as M5 requires, GITHUB_TOKEN is used
+# instead of a user-managed registry secret, and permissions are declared
+# per job rather than globally.
+$ grep -nE 'needs:|github.sha|permissions:' .github/workflows/ci-cd.yml | head -10
+28:    needs: test
+30:    permissions: {contents: read, packages: write}
+40:          docker build -t ghcr.io/${{ github.repository_owner }}/taskboard-backend:${{ github.sha }} ./backend
+41:          docker build -t ghcr.io/${{ github.repository_owner }}/taskboard-frontend:${{ github.sha }} ./frontend
+45:          image-ref: ghcr.io/${{ github.repository_owner }}/taskboard-backend:${{ github.sha }}
+52:          image-ref: ghcr.io/${{ github.repository_owner }}/taskboard-frontend:${{ github.sha }}
+58:          docker push ghcr.io/${{ github.repository_owner }}/taskboard-backend:${{ github.sha }}
+59:          docker push ghcr.io/${{ github.repository_owner }}/taskboard-frontend:${{ github.sha }}
+62:    needs: build-scan-push
+64:    permissions: {contents: read, packages: read}
+

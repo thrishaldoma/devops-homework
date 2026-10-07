@@ -1,0 +1,88 @@
+# Session 21 reference project (TaskBoard) brought up with Docker Compose.
+# Deviation: host ports 3000 and 3001 were already occupied on this machine
+# by unrelated node processes, so the UI is published on 3080 through an
+# override file. Nothing inside the stack changed.
+$ docker compose -f docker-compose.yml -f /private/tmp/claude-501/-Users-thrishaldoma-devops-homework/ea0b01bb-3b93-47f3-aebe-7e40c2d20efb/scratchpad/port-override.yml ps --format 'table {{.Service}}\t{{.State}}\t{{.Ports}}'
+SERVICE    STATE     PORTS
+backend    running   0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+frontend   running   0.0.0.0:3080->80/tcp, [::]:3080->80/tcp
+postgres   running   0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+
+# 
+# --- images produced by 'docker compose build' ---
+$ docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.Size}}' | grep -E 'session21|REPOSITORY'
+REPOSITORY                    TAG         SIZE
+session21-python-backend      latest      325MB
+session21-python-frontend     latest      76.3MB
+
+# 
+# --- service metadata, liveness and readiness ---
+$ curl -s http://localhost:8000/ | python3 -m json.tool
+{
+    "service": "TaskBoard API",
+    "version": "1.0.0",
+    "docs": "/docs"
+}
+
+$ curl -s http://localhost:8000/health
+{"status":"UP"}
+$ curl -s http://localhost:8000/ready
+{"status":"READY"}
+# 
+# --- REST API: the six tasks seeded through POST /api/tasks ---
+$ curl -s http://localhost:8000/api/tasks | python3 -c "import json,sys; rows=json.load(sys.stdin); [print('%2d  %-12s %-7s %s' % (t['id'], t['status'], t['priority'], t['title'])) for t in rows]"
+ 6  TODO         LOW     Document the troubleshooting lab
+ 5  TODO         LOW     Configure HPA on the backend
+ 4  DONE         MEDIUM  Write Helm chart for TaskBoard
+ 3  IN_PROGRESS  MEDIUM  Wire Prometheus ServiceMonitor
+ 2  DONE         HIGH    Add Trivy gate to the pipeline
+ 1  IN_PROGRESS  HIGH    Provision EKS cluster with Terraform
+
+$ curl -s http://localhost:8000/api/tasks/stats | python3 -m json.tool
+{
+    "total": 6,
+    "todo": 2,
+    "inProgress": 2,
+    "done": 2
+}
+
+# 
+# --- PUT and DELETE exercised against a throwaway task ---
+$ curl -s -X POST http://localhost:8000/api/tasks -H 'Content-Type: application/json' -d '{"title":"Temporary task","priority":"LOW","assignee":"demo","status":"TODO"}' | python3 -m json.tool
+{
+    "title": "Temporary task",
+    "description": "",
+    "priority": "LOW",
+    "status": "TODO",
+    "assignee": "demo",
+    "id": 7,
+    "created_at": "2026-10-07T18:26:24.849966Z"
+}
+
+$ curl -s -X PUT http://localhost:8000/api/tasks/7 -H 'Content-Type: application/json' -d '{"status":"DONE"}' | python3 -c "import json,sys; t=json.load(sys.stdin); print('id=%s status is now %s' % (t['id'], t['status']))"
+id=7 status is now DONE
+
+$ curl -s -o /dev/null -w 'DELETE /api/tasks/7 -> HTTP %{http_code}\n' -X DELETE http://localhost:8000/api/tasks/7
+DELETE /api/tasks/7 -> HTTP 204
+
+$ curl -s -o /dev/null -w 'GET    /api/tasks/7 -> HTTP %{http_code} (gone)\n' http://localhost:8000/api/tasks/7
+GET    /api/tasks/7 -> HTTP 404 (gone)
+
+# 
+# --- the frontend container proxies /api to the backend over the compose network ---
+$ curl -s -o /dev/null -w 'GET  http://localhost:3080/          -> HTTP %{http_code}\n' http://localhost:3080/
+GET  http://localhost:3080/          -> HTTP 200
+
+$ curl -s -o /dev/null -w 'GET  http://localhost:3080/api/tasks -> HTTP %{http_code}\n' http://localhost:3080/api/tasks
+GET  http://localhost:3080/api/tasks -> HTTP 200
+
+# 
+# --- Prometheus metrics exposed by the FastAPI instrumentator ---
+$ curl -s http://localhost:8000/metrics | grep -E '^http_requests_total' | head -6
+http_requests_total{handler="/health",method="GET",status="2xx"} 3.0
+http_requests_total{handler="/",method="GET",status="2xx"} 3.0
+http_requests_total{handler="/ready",method="GET",status="2xx"} 3.0
+http_requests_total{handler="/metrics",method="GET",status="2xx"} 2.0
+http_requests_total{handler="/api/tasks",method="GET",status="2xx"} 9.0
+http_requests_total{handler="/api/tasks",method="POST",status="2xx"} 7.0
+

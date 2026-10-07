@@ -1,0 +1,71 @@
+# M7 - Terraform. Run exactly as the project README instructs:
+#     cd terraform && terraform init && terraform plan
+$ terraform version | head -1
+Terraform v1.16.4
+
+$ ls -A
+.gitignore
+README.md
+main.tf
+outputs.tf
+variables.tf
+versions.tf
+
+# 
+# FINDING 1 - terraform.tfvars.example is absent. M7 awards a point for it.
+# 
+# FINDING 2 - two of the four files are not valid HCL, so init fails.
+# Checked file by file:
+$ for f in main.tf versions.tf variables.tf outputs.tf; do printf '%-14s ' "$f"; terraform fmt -check -no-color "$f" >/dev/null 2>&1 && echo 'parses OK' || echo 'PARSE ERROR'; done
+main.tf        PARSE ERROR
+versions.tf    PARSE ERROR
+variables.tf   parses OK
+outputs.tf     parses OK
+
+# 
+# Everything here is written on one line. HCL permits that only when the
+# block holds at most ONE argument, which is why variables.tf and
+# outputs.tf are fine - each of their blocks has exactly one:
+$ cat variables.tf
+variable "aws_region" { default = "ap-south-1" }
+variable "cluster_name" { default = "taskboard-eks" }
+variable "environment" { default = "dev" }
+
+# 
+# ...while the blocks carrying several arguments are rejected: the two
+# 'module' blocks in main.tf and the 'terraform' block in versions.tf.
+$ terraform init -no-color -input=false 2>&1 | grep -E 'Error:|on (main|versions)\.tf line|A single-line block' | head -8
+Error: Terraform encountered problems during initialisation, including problems
+Error: Invalid single-argument block definition
+  on main.tf line 1, in module "vpc":
+A single-line block definition must end with a closing brace immediately
+Error: Invalid single-argument block definition
+  on versions.tf line 1, in terraform:
+A single-line block definition must end with a closing brace immediately
+
+# 
+# init does get as far as downloading the registry modules, then fails when
+# it parses the root configuration. Its exit status:
+$ terraform init -no-color -input=false >/dev/null 2>&1; echo "terraform init exit code: $?"
+terraform init exit code: 1
+
+$ rm -rf .terraform .terraform.lock.hcl; echo 'module cache removed again (it is gitignored, and 10 MB)'
+module cache removed again (it is gitignored, and 10 MB)
+
+# 
+# Consequence: because init exits non-zero, 'terraform plan', 'apply' and
+# 'destroy' cannot run, and no VPC or EKS cluster can be produced from this
+# directory as it stands. The fix is mechanical - spread those three blocks
+# over multiple lines - but nothing in M7 works until it is done.
+# 
+# Second, independent limit on M7 in this environment: there is no AWS
+# account here, and the LocalStack container used for Sessions 18-19 is the
+# community edition, which does not offer EKS at all.
+$ curl -s http://localhost:4566/_localstack/health | python3 -c "import json,sys; d=json.load(sys.stdin); s=d.get('services',{}); print('localstack edition:', d.get('edition')); print('ec2:', s.get('ec2')); print('iam:', s.get('iam')); print('eks:', s.get('eks','NOT OFFERED'))"
+localstack edition: community
+ec2: running
+iam: available
+eks: NOT OFFERED
+
+# So even a corrected configuration could have its network layer applied
+# here, but not its EKS cluster.

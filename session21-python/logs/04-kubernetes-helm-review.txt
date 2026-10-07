@@ -1,0 +1,115 @@
+# Static review of the Kubernetes layer. Nothing was deployed to a cluster;
+# the chart is rendered with 'helm template' so every claim below is
+# checked against what Helm actually produces.
+$ helm version --short
+v4.3.0+gbec5b06
+
+$ helm lint ./helm/taskboard
+==> Linting ./helm/taskboard
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+
+# 
+# --- the name helper, and the backend Service it produces ---
+$ cat helm/taskboard/templates/_helpers.tpl
+{{- define "taskboard.fullname" -}}{{ .Release.Name }}-taskboard{{- end }}
+
+$ helm template taskboard ./helm/taskboard 2>/dev/null | awk '/backend-service.yaml/,/frontend-service/' | head -13
+# Source: taskboard/templates/backend-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskboard-taskboard-backend
+  labels: {app: taskboard-backend}
+spec:
+  selector: {app: taskboard-backend}
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
+
+
+# 
+# --- what the Ingress routes to ---
+$ helm template taskboard ./helm/taskboard --set ingress.enabled=true 2>/dev/null | awk '/kind: Ingress/,0' | head -12
+kind: Ingress
+metadata: {name: taskboard}
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: taskboard.local
+    http:
+      paths:
+      - {path: /api, pathType: Prefix, backend: {service: {name: taskboard-backend, port: {number: 8080}}}}
+      - {path: /, pathType: Prefix, backend: {service: {name: taskboard-frontend, port: {number: 80}}}}
+
+---
+
+# 
+# FINDING 1 - the Ingress backend does not exist, in two ways at once.
+#   Ingress /api sends traffic to  Service 'taskboard-backend'          port 8080
+#   the chart actually creates     Service 'taskboard-taskboard-backend' port 8000
+# The name differs because the Service uses the fullname helper above,
+# which prefixes the release name, while the Ingress hardcodes a short
+# name. The port differs too. Either alone returns 503 for /api.
+# (The frontend route is fine: Service 'taskboard-frontend' really is on 80.)
+# 
+# FINDING 2 - the frontend image cannot start in Kubernetes at all.
+# frontend/nginx.conf proxies /api to the literal host 'backend':
+$ grep -n 'proxy_pass' frontend/nginx.conf
+13:    proxy_pass http://backend:8000;
+21:    proxy_pass http://backend:8000/health;
+
+# Nginx resolves a static proxy_pass hostname once, at startup, and refuses
+# to start when it cannot. Under Compose the service really is named
+# 'backend', so it works. In this chart the backend Service is
+# 'taskboard-taskboard-backend', so the pod would CrashLoopBackOff.
+# Demonstrated by running the image where 'backend' does not resolve:
+$ docker run --rm session21-python-frontend:latest >/private/tmp/claude-501/-Users-thrishaldoma-devops-homework/ea0b01bb-3b93-47f3-aebe-7e40c2d20efb/scratchpad/nginx-probe.txt 2>&1; echo "container exit code: $?"; tail -2 /private/tmp/claude-501/-Users-thrishaldoma-devops-homework/ea0b01bb-3b93-47f3-aebe-7e40c2d20efb/scratchpad/nginx-probe.txt
+container exit code: 1
+2026/10/07 18:33:53 [emerg] 1#1: host not found in upstream "backend" in /etc/nginx/conf.d/default.conf:13
+nginx: [emerg] host not found in upstream "backend" in /etc/nginx/conf.d/default.conf:13
+
+# 
+# FINDING 3 - the default image references are placeholders.
+$ grep -E 'image:|tag:' ./helm/taskboard/values.yaml
+  image: ghcr.io/YOUR_ORG/taskboard-frontend
+  tag: latest
+  image: ghcr.io/YOUR_ORG/taskboard-backend
+  tag: latest
+
+# A plain 'helm upgrade --install', which is what the project README tells
+# the student to run, would try to pull ghcr.io/YOUR_ORG/... and fail.
+# Only the CI path works, because it overrides both with --set. The default
+# tag is also 'latest', while M5 requires commit-SHA tags.
+# 
+# FINDING 4 - the database password is committed and becomes a plain Secret.
+$ grep -A4 '^postgres:' ./helm/taskboard/values.yaml
+postgres:
+  host: taskboard-postgres
+  database: taskboard
+  username: taskboard
+  password: taskboard
+
+$ helm template taskboard ./helm/taskboard 2>/dev/null | awk '/kind: Secret/,/password/' | head -8
+kind: Secret
+metadata: {name: taskboard-postgres}
+type: Opaque
+stringData:
+  username: "taskboard"
+  password: "taskboard"
+
+# Anyone who can read the repository can read the production password, and
+# rotating it means a chart release. A required value with no default, or
+# an existing Secret referenced by name, avoids both.
+# 
+# --- what IS correct in this chart ---
+# Replica counts meet M8's 'at least 2 each', the Services are ClusterIP by
+# default, probes are defined, and an HPA and a ServiceMonitor are present.
+$ helm template taskboard ./helm/taskboard 2>/dev/null | grep -cE 'kind: (Deployment|Service|HorizontalPodAutoscaler|ServiceMonitor|Secret|PersistentVolumeClaim)' | xargs echo 'objects rendered:'
+objects rendered: 11
+
+$ helm template taskboard ./helm/taskboard 2>/dev/null | grep -E '^  replicas:' | xargs echo 'replica counts:'
+replica counts: replicas: 2 replicas: 2 replicas: 1
+

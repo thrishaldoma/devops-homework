@@ -1,0 +1,108 @@
+# M4 (non-root images) and M6 (Trivy), both checked against the images that
+# 'docker compose build' actually produced.
+# 
+# --- the USER recorded in each image, and the uid in effect at runtime ---
+$ docker inspect -f 'backend  USER={{.Config.User}}' session21-python-backend:latest
+backend  USER=10001
+
+$ docker inspect -f 'frontend USER={{.Config.User}}' session21-python-frontend:latest
+frontend USER=
+
+$ docker exec session21-python-backend-1 id
+uid=10001(appuser) gid=10001(appuser) groups=10001(appuser)
+
+$ docker exec session21-python-frontend-1 id
+uid=0(root) gid=0(root) groups=0(root),0(root),1(bin),2(daemon),3(sys),4(adm),6(disk),10(wheel),11(floppy),20(dialout),26(tape),27(video)
+
+# 
+# FINDING - the backend is non-root (uid 10001, from 'USER 10001' in its
+# Dockerfile); the frontend runs as root. frontend/Dockerfile ends on the
+# stock nginx:1.27-alpine image and sets no USER, and stock nginx keeps its
+# master process as root so it can bind port 80. M4 awards 2 points for
+# 'images run as non-root users', so half of that is lost.
+# The usual fix is the nginxinc/nginx-unprivileged variant, which runs as
+# uid 101 and listens on 8080.
+$ grep -nE '^FROM|^USER|^EXPOSE' frontend/Dockerfile
+1:FROM node:22-alpine AS build
+7:FROM nginx:1.27-alpine
+10:EXPOSE 80
+
+$ grep -nE '^FROM|^USER|^EXPOSE' backend/Dockerfile
+1:FROM python:3.12-slim
+9:USER 10001
+10:EXPOSE 8000
+
+# 
+# --- image sizes ---
+$ docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.Size}}' | grep -E 'session21|REPOSITORY'
+REPOSITORY                    TAG         SIZE
+session21-python-backend      latest      325MB
+session21-python-frontend     latest      76.3MB
+
+# 
+# ==============================================================
+# M6 - Trivy, run locally with the same settings the pipeline uses:
+#   --severity HIGH,CRITICAL  --ignore-unfixed  --exit-code 1
+# ==============================================================
+$ trivy --version | head -1
+Version: 0.75.0
+
+# 
+# --- backend image: the Python findings ---
+$ sed -n '/^Python (python-pkg)/,/^└/p' /private/tmp/claude-501/-Users-thrishaldoma-devops-homework/ea0b01bb-3b93-47f3-aebe-7e40c2d20efb/scratchpad/trivy-backend.txt | head -22
+Python (python-pkg)
+===================
+Total: 3 (HIGH: 3, CRITICAL: 0)
+
+┌──────────────────────┬────────────────┬──────────┬────────┬───────────────────┬───────────────┬──────────────────────────────────────────────────────────────┐
+│       Library        │ Vulnerability  │ Severity │ Status │ Installed Version │ Fixed Version │                            Title                             │
+├──────────────────────┼────────────────┼──────────┼────────┼───────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ starlette (METADATA) │ CVE-2025-62727 │ HIGH     │ fixed  │ 0.41.3            │ 0.49.1        │ starlette: Starlette DoS via Range header merging            │
+│                      │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2025-62727                   │
+│                      ├────────────────┤          │        │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                      │ CVE-2026-48818 │          │        │                   │ 1.1.0         │ starlette: Starlette: SSRF and NTLM credential theft via UNC │
+│                      │                │          │        │                   │               │ paths in StaticFiles...                                      │
+│                      │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-48818                   │
+│                      ├────────────────┤          │        │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                      │ CVE-2026-54283 │          │        │                   │ 1.3.1         │ starlette: Starlette: request.form() limits silently ignored │
+│                      │                │          │        │                   │               │ for application/x-www-form-urlencoded enable DoS             │
+│                      │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-54283                   │
+└──────────────────────┴────────────────┴──────────┴────────┴───────────────────┴───────────────┴──────────────────────────────────────────────────────────────┘
+
+# 
+# --- frontend image: totals only; its table runs to 44 rows ---
+$ grep -E '^Total:' /private/tmp/claude-501/-Users-thrishaldoma-devops-homework/ea0b01bb-3b93-47f3-aebe-7e40c2d20efb/scratchpad/trivy-frontend.txt
+Total: 44 (HIGH: 42, CRITICAL: 2)
+
+# 
+# --- what the gate would actually do ---
+$ trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --no-progress --exit-code 1 session21-python-backend:latest >/dev/null 2>&1; echo "backend  -> trivy exit $?"
+backend  -> trivy exit 1
+
+$ trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --no-progress --exit-code 1 session21-python-frontend:latest >/dev/null 2>&1; echo "frontend -> trivy exit $?"
+frontend -> trivy exit 1
+
+# 
+# FINDING - both images fail the gate, so the build-scan-push job stops the
+# pipeline and no image is ever published.
+# 
+# Explaining the backend finding, which is what M6 asks for: all three HIGH
+# entries are the same package - starlette 0.41.3, pulled in transitively
+# by the pinned fastapi==0.115.6. CVE-2025-62727 is a denial of service via
+# Range header merging; CVE-2026-48818 is SSRF / NTLM credential theft via
+# UNC paths in StaticFiles; CVE-2026-54283 lets form-size limits be ignored,
+# again enabling denial of service. All three are marked 'fixed' upstream,
+# which is exactly why --ignore-unfixed does not hide them: that flag only
+# suppresses vulnerabilities with no available fix.
+# 
+# Checking that raising the fastapi pin would actually clear them, rather
+# than assuming it - the fixed versions required are 0.49.1, 1.1.0 and 1.3.1:
+$ /private/tmp/claude-501/-Users-thrishaldoma-devops-homework/ea0b01bb-3b93-47f3-aebe-7e40c2d20efb/scratchpad/fastapi-probe/bin/pip freeze | grep -iE '^(fastapi|starlette)'
+fastapi==0.142.2
+starlette==1.7.0
+
+# starlette 1.7.0 is above all three, so a current fastapi clears the set.
+# 
+# The frontend's 44 findings are operating-system packages from its
+# nginx:1.27-alpine base, not project code; the fix there is a rebuild on a
+# current base image rather than any source change.
