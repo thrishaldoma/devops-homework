@@ -1,0 +1,111 @@
+# Prometheus + Grafana on the cluster, installed with Helm (Session 15).
+$ helm list -n monitoring
+NAME      	NAMESPACE 	REVISION	UPDATED                             	STATUS  	CHART             	APP VERSION
+grafana   	monitoring	1       	2026-10-07 22:12:35.492808 +0530 IST	deployed	grafana-10.5.15   	12.3.1     
+prometheus	monitoring	1       	2026-10-07 22:10:59.171304 +0530 IST	deployed	prometheus-29.36.0	v3.15.0    
+
+$ kubectl get pods,svc -n monitoring --no-headers | head -10
+pod/grafana-57c78b8b5c-qw5xd                         1/1   Running   0     50s
+pod/prometheus-kube-state-metrics-54dc6d7965-t67v9   1/1   Running   0     2m26s
+pod/prometheus-prometheus-node-exporter-5kwbm        1/1   Running   0     2m26s
+pod/prometheus-prometheus-node-exporter-w7nvk        1/1   Running   0     2m26s
+pod/prometheus-server-5dcbff8495-v7kgg               2/2   Running   0     2m26s
+service/grafana                               ClusterIP   10.99.161.118    <none>   80/TCP     50s
+service/prometheus-kube-state-metrics         ClusterIP   10.108.61.111    <none>   8080/TCP   2m26s
+service/prometheus-prometheus-node-exporter   ClusterIP   10.109.113.144   <none>   9100/TCP   2m26s
+service/prometheus-server                     ClusterIP   10.109.153.192   <none>   80/TCP     2m26s
+
+# 
+# ===== what Prometheus is scraping =====
+$ curl -s 'http://127.0.0.1:19090/api/v1/targets?state=active' | python3 -c "
+import sys,json
+d=json.load(sys.stdin)['data']['activeTargets']
+seen={}
+for t in d: seen[t['labels'].get('job','?')] = seen.get(t['labels'].get('job','?'),0)+1
+for k,v in sorted(seen.items()): print('  %-42s %d target(s)' % (k,v))"
+  kubernetes-api-servers                     1 target(s)
+  kubernetes-nodes                           2 target(s)
+  kubernetes-nodes-cadvisor                  2 target(s)
+  kubernetes-service-endpoints               5 target(s)
+  prometheus                                 1 target(s)
+
+# 
+# ===== METRICS: CPU utilisation, per node =====
+$ curl -s --data-urlencode 'query=100 - (avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100)' 'http://127.0.0.1:19090/api/v1/query' | python3 -c "
+import sys,json
+for r in json.load(sys.stdin)['data']['result']:
+    print('  %-24s CPU busy: %5.2f%%' % (r['metric'].get('instance','?'), float(r['value'][1])))"
+  192.168.49.3:9100        CPU busy:  2.46%
+  192.168.49.2:9100        CPU busy:  2.86%
+
+# 
+# ===== METRICS: memory utilisation, per node =====
+$ curl -s --data-urlencode 'query=100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)' 'http://127.0.0.1:19090/api/v1/query' | python3 -c "
+import sys,json
+for r in json.load(sys.stdin)['data']['result']:
+    print('  %-24s memory used: %5.2f%%' % (r['metric'].get('instance','?'), float(r['value'][1])))"
+  192.168.49.3:9100        memory used: 38.45%
+  192.168.49.2:9100        memory used: 39.27%
+
+# 
+# ===== APPLICATION HEALTH: pods by phase, from kube-state-metrics =====
+$ curl -s --data-urlencode 'query=sum by (namespace) (kube_pod_status_ready{condition="true"})' 'http://127.0.0.1:19090/api/v1/query' | python3 -c "
+import sys,json
+for r in sorted(json.load(sys.stdin)['data']['result'], key=lambda x: x['metric'].get('namespace','')):
+    print('  %-22s %s ready pod(s)' % (r['metric'].get('namespace','?'), r['value'][1]))"
+  argocd                 6 ready pod(s)
+  kube-system            11 ready pod(s)
+  monitoring             4 ready pod(s)
+  session20              2 ready pod(s)
+
+# 
+# ===== ALERTS: rules defined in monitoring/alert-rules.yaml, loaded by helm upgrade =====
+$ helm history prometheus -n monitoring | tail -3
+REVISION	UPDATED                 	STATUS    	CHART             	APP VERSION	DESCRIPTION     
+1       	Wed Oct  7 22:10:59 2026	superseded	prometheus-29.36.0	v3.15.0    	Install complete
+2       	Wed Oct  7 22:13:55 2026	deployed  	prometheus-29.36.0	v3.15.0    	Upgrade complete
+
+$ curl -s 'http://127.0.0.1:19090/api/v1/rules' | python3 -c "
+import sys,json
+for g in json.load(sys.stdin)['data']['groups']:
+    if g['name']!='session20-demo': continue
+    for r in g['rules']:
+        print('  %-24s for=%-5s  %s' % (r['name'], r.get('duration',0), r.get('labels',{}).get('severity','')))"
+  NodeMemoryHigh           for=30     warning
+  PodNotReady              for=300    critical
+  PodRestartingTooOften    for=300    warning
+
+# 
+# an alert goes PENDING first, then FIRING once it has held for its 'for' duration:
+$ curl -s 'http://127.0.0.1:19090/api/v1/alerts' | python3 -c "
+import sys,json
+for a in json.load(sys.stdin)['data']['alerts']:
+    print('  %-22s %-8s %s' % (a['labels']['alertname'], a['state'].upper(), a['annotations'].get('description', a['annotations'].get('summary',''))))"
+  NodeMemoryHigh         FIRING   192.168.49.3:9100 memory is 39.2%.
+  NodeMemoryHigh         FIRING   192.168.49.2:9100 memory is 40.6%.
+  PodNotReady            PENDING  Pod argocd/argocd-applicationset-controller-76fd8cdd4f-x54q7 not ready
+
+# The 20% memory threshold is deliberately low so the rule fires on an idle
+# lab cluster; production would use >85% for 10m. The PodNotReady and
+# PodRestartingTooOften rules are the genuinely useful ones - the second is
+# what catches the CrashLoopBackOff from Session 14 before a human notices.
+# 
+# ===== Grafana, wired to Prometheus as its datasource =====
+# The admin password is read from the cluster Secret at run time and passed
+# through $GRAFANA_PW - it is never written into this transcript.
+$ GRAFANA_PW=$(kubectl get secret -n monitoring grafana -o jsonpath='{.data.admin-password}' | base64 -d)
+
+$ curl -s -u "admin:$GRAFANA_PW" http://127.0.0.1:13000/api/health
+{
+  "database": "ok",
+  "version": "12.3.1",
+  "commit": "3a1c80ca7ce612f309fdc99338dd3c5e486339be"
+}
+
+$ curl -s -u "admin:$GRAFANA_PW" http://127.0.0.1:13000/api/datasources
+  datasource: Prometheus (prometheus) -> http://prometheus-server.monitoring.svc.cluster.local  default=True
+
+# query Prometheus THROUGH Grafana's datasource proxy, proving the wiring:
+$ curl -s -u "admin:$GRAFANA_PW" .../api/datasources/proxy/1/api/v1/query?query=up
+  scrape targets up: 11 of 11
+

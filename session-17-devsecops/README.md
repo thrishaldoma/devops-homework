@@ -2,7 +2,7 @@
 
 **Name:** THRISHAL DOMA · **Enrollment Number:** 24BCS10097
 **Repository:** <https://github.com/thrishaldoma/devops-homework>
-**Pipeline:** [DevSecOps](../../actions/workflows/devsecops.yml) · **Image:** `ghcr.io/thrishaldoma/devsecops-demo`
+**Pipeline:** [DevSecOps](https://github.com/thrishaldoma/devops-homework/actions/workflows/devsecops.yml) · **Image:** `ghcr.io/thrishaldoma/devsecops-demo`
 
 Every scanner below produced **real findings** — locally and in CI. Transcripts in
 [`logs/`](./logs), screenshots in [`screenshots/`](./screenshots).

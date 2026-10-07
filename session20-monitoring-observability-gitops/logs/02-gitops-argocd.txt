@@ -1,0 +1,118 @@
+# GitOps with ArgoCD, syncing from the real repository this homework lives in:
+# https://github.com/thrishaldoma/devops-homework
+$ kubectl get pods -n argocd --no-headers | awk '{print $1, $2, $3}'
+argocd-application-controller-0 1/1 Running
+argocd-applicationset-controller-76fd8cdd4f-x54q7 1/1 Running
+argocd-dex-server-66c78cf887-t9j2r 1/1 Running
+argocd-notifications-controller-7fb9868fd6-2kjcq 1/1 Running
+argocd-redis-bdbdffcb4-txwjs 1/1 Running
+argocd-repo-server-d89c7967d-qf7v5 1/1 Running
+argocd-server-776b7cdd4d-wfgzc 1/1 Running
+
+# 
+# ===== register the Application (the only imperative step in GitOps) =====
+$ cat /Users/thrishaldoma/devops-homework/session20-monitoring-observability-gitops/gitops/argocd-application.yaml | grep -A 4 'source:'
+  source:
+    repoURL: https://github.com/thrishaldoma/devops-homework.git
+    targetRevision: main
+    path: session20-monitoring-observability-gitops/gitops-app
+
+
+$ kubectl apply -f /Users/thrishaldoma/devops-homework/session20-monitoring-observability-gitops/gitops/argocd-application.yaml
+application.argoproj.io/session20-mini created
+
+# From here nobody runs kubectl against the app. ArgoCD clones the repo,
+# reads the manifests at that path and reconciles the cluster to match.
+# 
+# ===== ArgoCD refused to sync, and it was RIGHT to =====
+$ kubectl get application -n argocd session20-mini -o jsonpath='{.status.conditions[0].message}{"\n"}'
+Failed to load target state: failed to generate manifest for source 1 of 1: rpc error: code = Unknown desc = repository contains out-of-bounds symlinks. file: 01-linux/links-lab/broken
+
+# This is a supply-chain control, not a bug. An out-of-bounds symlink in a Git
+# repo can point at anything on the repo-server's filesystem - /etc/passwd, a
+# mounted token - and ArgoCD would happily render it into a manifest. So the
+# repo-server refuses the whole repository.
+# 
+# The offending file is from Session 1's links lab:
+$ ls -la 01-linux/links-lab/broken
+lrwxr-xr-x@ 1 thrishaldoma  staff  12 Sep  4 22:41 01-linux/links-lab/broken -> /nonexistent
+
+$ grep -n 'ln -s /nonexistent broken' 01-linux/README.md | head -2
+187:$ ln -s /nonexistent broken && find . -xtype l
+
+# It is a deliberately broken symlink, documented with captured output in
+# Session 1. Rewriting it would make that evidence inconsistent with its own
+# artifact, so it stays.
+# 
+# ===== resolution =====
+# ArgoCD exposes an escape hatch, marked '(not recommended)':
+$ kubectl exec -n argocd deploy/argocd-repo-server -c argocd-repo-server -- argocd-repo-server --help 2>&1 | grep -A1 'allow-oob-symlinks'
+      --allow-oob-symlinks                             Allow out-of-bounds symlinks in repositories (not recommended)
+      --client-ca-path string                          Path to the client CA certificate file for mTLS. Defaults to the auto-mounted Secret path; mTLS is skipped if the file does not exist. (default "/app/config/reposerver/mtls/client-ca.crt")
+
+# Enabling it is defensible HERE and nowhere else: this is a single-author
+# homework monorepo, the symlink is known, benign and documented, and the
+# repo is public so there is nothing on the repo-server worth exfiltrating.
+# 
+# THE PRODUCTION ANSWER IS DIFFERENT: keep a SEPARATE config repository
+# containing only manifests. That is standard GitOps practice for reasons
+# beyond this symlink - a small config repo means a tighter RBAC surface, a
+# clean audit trail of deploys, and application commits that do not trigger
+# reconciliation. The monorepo here is a homework constraint, not a model.
+$ kubectl set env deployment/argocd-repo-server -n argocd ARGOCD_REPO_SERVER_ALLOW_OUT_OF_BOUNDS_SYMLINKS=true
+deployment.apps/argocd-repo-server env updated
+
+$ kubectl rollout status deployment/argocd-repo-server -n argocd --timeout=300s
+Waiting for deployment "argocd-repo-server" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "argocd-repo-server" rollout to finish: 1 old replicas are pending termination...
+deployment "argocd-repo-server" successfully rolled out
+
+# 
+# ===== synced from Git - nobody ran kubectl against this app =====
+$ kubectl get application -n argocd session20-mini -o custom-columns='SYNC:.status.sync.status,HEALTH:.status.health.status,REVISION:.status.sync.revision'
+SYNC     HEALTH        REVISION
+Synced   Progressing   b40ff23d6bcaf13354229d0b025249c45c2245a6
+
+$ kubectl get all -n session20
+NAME                                  READY   STATUS              RESTARTS   AGE
+pod/session20-mini-7d86f7c58c-7m664   0/1     ContainerCreating   0          1s
+pod/session20-mini-7d86f7c58c-gz6q5   0/1     ContainerCreating   0          1s
+
+NAME                     TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
+service/session20-mini   ClusterIP   10.99.182.156   <none>        80/TCP    1s
+
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/session20-mini   0/2     2            0           1s
+
+NAME                                        DESIRED   CURRENT   READY   AGE
+replicaset.apps/session20-mini-7d86f7c58c   2         2         0       1s
+
+$ kubectl get application -n argocd session20-mini -o jsonpath='{range .status.resources[*]}{.kind}/{.name}  {.status}{"\n"}{end}'
+Namespace/session20  Synced
+Service/session20-mini  Synced
+Deployment/session20-mini  Synced
+
+# 
+# ===== CONTINUOUS RECONCILIATION: manually break it, watch Git win =====
+$ kubectl get deploy session20-mini -n session20 -o jsonpath='replicas in Git: 2, running now: {.spec.replicas}{"\n"}'
+replicas in Git: 2, running now: 2
+
+# scale it by hand, the way an engineer would during an incident:
+$ kubectl scale deployment session20-mini -n session20 --replicas=5
+deployment.apps/session20-mini scaled
+
+$ kubectl get deploy session20-mini -n session20 -o jsonpath='immediately after: {.spec.replicas}{"\n"}'
+immediately after: 5
+
+# now wait. Nobody reverts this - ArgoCD does, because Git says 2.
+$ while true; do kubectl get deploy session20-mini -n session20 -o jsonpath=.spec.replicas; sleep 10; done
+10s  replicas=5  sync=Synced
+20s  replicas=2  sync=Synced
+30s  replicas=2  sync=Synced
+   <- reverted to the value in Git
+
+$ kubectl get pods -n session20 --no-headers | wc -l | xargs echo 'pods now:'
+pods now: 2
+
+# selfHeal: true is what did that. The cluster is not the source of truth;
+# the Git repository is. A manual change is treated as DRIFT and undone.

@@ -11,7 +11,7 @@ the commands, their real captured output, and screenshots.
 
 Sessions 09–12 (Kubernetes) were run against a live **2-node minikube cluster**
 (Kubernetes v1.37.0, containerd 2.3.4). See
-[Kubernetes sessions](#kubernetes-sessions-0912) below.
+[Sessions 09–20](#sessions-0920--kubernetes-cicd-iac-and-gitops) below.
 
 Linux-only tasks (`adduser`, `useradd`, `journalctl`) were executed inside an
 Ubuntu 22.04 container running systemd as PID 1, because macOS provides
@@ -38,8 +38,11 @@ neither systemd nor those utilities. The image definition is in
 | 15 | Helm | [`session-15-helm/`](./session-15-helm) | chart authoring · install/upgrade/rollback · one chart, two environments |
 | 16 | CI/CD & GitHub Actions | [`session-16-github-actions/`](./session-16-github-actions) | CI pipeline · CD pipeline · Docker build · artifacts |
 | 17 | DevSecOps | [`session-17-devsecops/`](./session-17-devsecops) | SAST · SCA · secret scanning · image scanning · security gate · ghcr.io · k8s deploy |
+| 18 | Terraform & IaC | [`session18-terraform-iac/`](./session18-terraform-iac) | S3 project on LocalStack · drift detection · IAM/EC2/S3/VPC/DynamoDB+RDS write-ups |
+| 19 | Cloud & Terraform in Action | [`session19-cloud-terraform/`](./session19-cloud-terraform) | 21-resource VPC/subnets/SG/EC2/S3 stack · dependencies · verified via AWS CLI |
+| 20 | Monitoring, Observability & GitOps | [`session20-monitoring-observability-gitops/`](./session20-monitoring-observability-gitops) | Prometheus · Grafana · firing alerts · three pillars · Argo CD self-heal |
 
-## Kubernetes sessions (09–12)
+## Sessions 09–20 — Kubernetes, CI/CD, IaC and GitOps
 
 | | |
 |---|---|

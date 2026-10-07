@@ -2,7 +2,7 @@
 
 **Name:** THRISHAL DOMA · **Enrollment Number:** 24BCS10097
 **Repository:** <https://github.com/thrishaldoma/devops-homework>
-**Pipelines:** [CI](../../actions/workflows/ci.yml) · [CD](../../actions/workflows/cd.yml)
+**Pipelines:** [CI](https://github.com/thrishaldoma/devops-homework/actions/workflows/ci.yml) · [CD](https://github.com/thrishaldoma/devops-homework/actions/workflows/cd.yml)
 
 Unlike the other sessions, this one could not be proven locally — the deliverable
 is *"screenshots of successful pipeline execution"*. These are **real GitHub

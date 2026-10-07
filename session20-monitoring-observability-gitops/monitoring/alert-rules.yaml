@@ -1,0 +1,37 @@
+# Alerting rules for the Session 20 demo.
+#
+# The thresholds here are deliberately low so the rules FIRE on an idle lab
+# cluster - the point is to show the Pending -> Firing lifecycle, not to ship
+# a sensible production threshold. Real values are noted beside each rule.
+serverFiles:
+  alerting_rules.yml:
+    groups:
+      - name: session20-demo
+        rules:
+          # Production would use > 85 for 10m. 20% fires here on purpose.
+          - alert: NodeMemoryHigh
+            expr: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 20
+            for: 30s
+            labels:
+              severity: warning
+            annotations:
+              summary: "Node {{ $labels.instance }} memory above threshold"
+              description: "{{ $labels.instance }} memory is {{ $value | printf \"%.1f\" }}%."
+
+          # A genuinely useful rule: any pod stuck not-ready for 5 minutes.
+          - alert: PodNotReady
+            expr: kube_pod_status_ready{condition="false"} == 1
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} not ready"
+
+          # Catches CrashLoopBackOff (Session 14) before a human notices.
+          - alert: PodRestartingTooOften
+            expr: increase(kube_pod_container_status_restarts_total[15m]) > 3
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is restarting repeatedly"
