@@ -19,3 +19,22 @@ tls.crt
 # Guard: raw build-progress logs. A `docker build --no-cache` once wrote a 29GB
 # file through the capture helper; never let BuildKit progress reach a log file.
 **/logs/*-local-build.txt
+
+# Node / frontend build output (Session 21 capstone)
+node_modules/
+dist/
+npm-debug.log*
+
+# Python virtualenvs
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Local environment files - only .env.example is committed
+.env
+.env.local
+backend/.env
+
+# Playwright MCP scratch output (accessibility snapshots from screenshotting)
+.playwright-mcp/
