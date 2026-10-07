@@ -1,0 +1,22 @@
+# FIX: allow ingress to the server pods, but only from pods labelled role=client.
+# This is the Kubernetes equivalent of the AWS security-group chaining in
+# Session 19 - allow by label, not by IP.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-client
+  namespace: netpol-demo
+spec:
+  podSelector:
+    matchLabels:
+      role: server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              role: client
+      ports:
+        - protocol: TCP
+          port: 80

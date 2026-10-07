@@ -80,6 +80,38 @@ CPU spike paging someone.
 > genuinely useful one: it catches the CrashLoopBackOff from Session 14
 > automatically, before a human notices.
 
+### Logs — the second signal, and where Kubernetes' built-in story stops
+
+Container stdout/stderr is collected by the kubelet and served by `kubectl logs`.
+A label selector aggregates across every pod of a Deployment:
+
+```
+$ kubectl logs -n session20 -l app=session20-mini --tail=2 --prefix
+[pod/session20-mini-...-7m664/app] 10.244.1.1 - - "GET / HTTP/1.1" 200 615 "kube-probe/1.37"
+[pod/session20-mini-...-gz6q5/app] 10.244.0.11 - - "GET /healthz-probe-test HTTP/1.1" 404 153 "curl/8.10.1"
+[pod/session20-mini-...-gz6q5/app] 2026/10/07 17:21:31 [error] 30#30: *500 open()
+    "/usr/share/nginx/html/healthz-probe-test" failed (2: No such file or directory)
+```
+
+That is the pillar in miniature: the **metric** would show a 404 rate ticking up;
+the **log** names the exact path that was missing and which pod served it.
+
+**The limit:**
+
+```
+$ kubectl logs -n session20 deploy/session20-mini --previous
+Error from server (BadRequest): previous terminated container "app" ... not found
+```
+
+`kubectl logs` only ever sees the **current and previous** container. Delete the
+pod and its logs go with it. That is why production runs a log **shipper** as a
+DaemonSet (Fluent Bit, Promtail) forwarding stdout to Loki or Elasticsearch
+before the pod disappears — the same one-pod-per-node pattern as Session 10's
+node-exporter.
+
+Prometheus deliberately does **not** store logs; high-cardinality text would
+destroy it. Loki is the log-side counterpart, queried from the same Grafana.
+
 ### Grafana, wired to Prometheus
 
 ```

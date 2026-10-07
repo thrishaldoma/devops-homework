@@ -1,0 +1,101 @@
+# ######## ISSUE: pod-to-pod networking blocked by a NetworkPolicy ########
+# --- 1. IDENTIFY: establish what 'working' looks like first ---
+$ kubectl get pods -n netpol-demo --show-labels --no-headers | awk '{print $1, $2, $3, $6}'
+client 1/1 Running role=client
+server 1/1 Running role=server
+stranger 1/1 Running role=other
+
+$ kubectl exec -n netpol-demo client -- curl -sS -o /dev/null -w 'client   -> server : HTTP %{http_code}\n' --max-time 6 http://server
+client   -> server : HTTP 200
+
+$ kubectl exec -n netpol-demo stranger -- curl -sS -o /dev/null -w 'stranger -> server : HTTP %{http_code}\n' --max-time 6 http://server
+stranger -> server : HTTP 200
+
+# both reach it - pod-to-pod traffic in a namespace is unrestricted by default.
+# 
+# --- 2. a default-deny policy is applied (by a platform team, say) ---
+$ kubectl apply -f /Users/thrishaldoma/devops-homework/session-14-kubernetes-troubleshooting/10-pod-networking/netpol-deny-all.yaml
+networkpolicy.networking.k8s.io/default-deny-ingress created
+
+$ kubectl exec -n netpol-demo client -- curl -sS -o /dev/null -w 'HTTP %{http_code}\n' --max-time 6 http://server 2>&1 | tail -1
+command terminated with exit code 28
+
+# 
+# --- 3. INVESTIGATE: note the SHAPE of the failure ---
+# exit code 28 = TIMED OUT, not 7 = connection refused. That distinction is
+# the whole diagnosis:
+#    refused (exit 7)  -> something answered and said no: nothing listening,
+#                         or a wrong targetPort (Session 14 mini-project)
+#    timeout (exit 28) -> packets are being DROPPED silently: a NetworkPolicy,
+#                         a firewall, or a missing route
+# Endpoints and DNS are both fine, which rules out the usual suspects:
+$ kubectl get endpointslice -n netpol-demo -l kubernetes.io/service-name=server -o custom-columns='ENDPOINTS:.endpoints[*].addresses' --no-headers
+[10.244.0.9]
+
+$ kubectl exec -n netpol-demo client -- nslookup server 2>&1 | grep -A1 'Name:' | head -2
+Name:	server.netpol-demo.svc.cluster.local
+Address: 10.104.166.72
+
+# so look for a policy:
+$ kubectl get networkpolicy -n netpol-demo
+NAME                   POD-SELECTOR   AGE
+default-deny-ingress   <none>         17s
+
+$ kubectl describe networkpolicy -n netpol-demo default-deny-ingress | grep -A 6 'Spec:'
+Spec:
+  PodSelector:     <none> (Allowing the specific traffic to all pods in this namespace)
+  Allowing ingress traffic:
+    <none> (Selected pods are isolated for ingress connectivity)
+  Not affecting egress traffic
+  Policy Types: Ingress
+
+# 
+# --- 4. ROOT CAUSE ---
+# podSelector: {} selects EVERY pod in the namespace, and with policyTypes:
+# [Ingress] and no ingress rules, all inbound traffic is denied. A pod becomes
+# 'isolated' the moment any policy selects it - and NetworkPolicy is allow-only,
+# so there is no way to write an exception inside this object.
+# 
+# --- 5. FIX: add an allow rule, scoped by LABEL not by IP ---
+$ cat /Users/thrishaldoma/devops-homework/session-14-kubernetes-troubleshooting/10-pod-networking/allow-from-client.yaml | grep -A 12 '^spec:'
+spec:
+  podSelector:
+    matchLabels:
+      role: server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              role: client
+      ports:
+        - protocol: TCP
+
+$ kubectl apply -f /Users/thrishaldoma/devops-homework/session-14-kubernetes-troubleshooting/10-pod-networking/allow-from-client.yaml
+networkpolicy.networking.k8s.io/allow-from-client created
+
+# 
+# --- 6. VERIFY: the client gets through, the stranger still does not ---
+$ kubectl exec -n netpol-demo client -- curl -sS -o /dev/null -w 'client   (role=client) -> server : HTTP %{http_code}\n' --max-time 6 http://server 2>&1 | tail -1
+client   (role=client) -> server : HTTP 200
+
+$ kubectl exec -n netpol-demo stranger -- curl -sS -o /dev/null -w 'stranger (role=other)  -> server : HTTP %{http_code}\n' --max-time 6 http://server 2>&1 | tail -1
+command terminated with exit code 28
+
+# The allow rule selects podSelector role=client, so 'stranger' is still
+# dropped. Selection is by LABEL, which keeps working as pods are replaced and
+# their IPs change - the same principle as chaining security groups by ID
+# rather than CIDR in Session 19.
+# 
+# NOTE ON CNI SUPPORT: a NetworkPolicy is inert unless the CNI plugin
+# implements it. Applying one to a cluster whose CNI ignores policy gives a
+# green 'created' and zero enforcement - a dangerous false sense of security.
+# This cluster's CNI does enforce it, which the timeouts above prove.
+$ kubectl get pods -n kube-system --no-headers | grep -E 'kindnet|calico|cilium' | awk '{print "  CNI pod: "$1}'
+  CNI pod: kindnet-cglt5
+  CNI pod: kindnet-x59bx
+
+$ kubectl delete namespace netpol-demo --wait=false
+namespace "netpol-demo" deleted
+

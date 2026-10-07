@@ -148,6 +148,70 @@ path — the failure is at the routing layer, not the naming layer.
 
 📄 [`logs/05-service-dns.txt`](./logs/05-service-dns.txt)
 
+### Pod networking — a NetworkPolicy silently dropping traffic
+
+Manifests: [`10-pod-networking/`](./10-pod-networking)
+
+Baseline first — pod-to-pod traffic inside a namespace is unrestricted by default:
+
+```
+client   -> server : HTTP 200
+stranger -> server : HTTP 200
+```
+
+Then a default-deny policy is applied:
+
+```
+$ kubectl exec -n netpol-demo client -- curl --max-time 6 http://server
+command terminated with exit code 28
+```
+
+**The shape of the failure is the diagnosis.** Exit **28** is a *timeout*, not
+exit **7** (connection refused):
+
+```
+refused (exit 7)   -> something answered and said no:
+                      nothing listening, or a wrong targetPort
+timeout (exit 28)  -> packets are being DROPPED silently:
+                      a NetworkPolicy, a firewall, or a missing route
+```
+
+Endpoints and DNS both check out, which rules out the usual suspects, so the
+next place to look is policy:
+
+```
+$ kubectl get networkpolicy -n netpol-demo
+NAME                   POD-SELECTOR   AGE
+default-deny-ingress   <none>         17s
+
+PodSelector:     <none> (Allowing the specific traffic to all pods in this namespace)
+Allowing ingress traffic:
+  <none> (Selected pods are isolated for ingress connectivity)
+```
+
+**Root cause:** `podSelector: {}` selects *every* pod, and with `policyTypes:
+[Ingress]` and no rules, all inbound traffic is denied. A pod becomes isolated
+the moment any policy selects it, and NetworkPolicy is **allow-only** — there is
+no deny rule to write an exception into.
+
+**Fix** — an allow rule scoped by **label**, not IP:
+
+```
+client   (role=client) -> server : HTTP 200
+stranger (role=other)  -> server : exit 28      <-- still dropped
+```
+
+Selecting by label keeps working as pods are replaced and their IPs change —
+the same principle as chaining security groups by ID rather than CIDR in
+Session 19.
+
+> **A NetworkPolicy is inert unless the CNI implements it.** Apply one to a
+> cluster whose CNI ignores policy and you get a green "created" with zero
+> enforcement — a dangerous false sense of security. This cluster's CNI does
+> enforce it, which the timeouts above prove.
+
+📄 [`logs/08-pod-networking.txt`](./logs/08-pod-networking.txt) · 📸 [`08-pod-networking.png`](./screenshots/08-pod-networking.png)
+
 ---
 
 ## Task 2b — The triage gauntlet (5 simultaneous failures)

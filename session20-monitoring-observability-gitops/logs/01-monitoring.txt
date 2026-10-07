@@ -109,3 +109,40 @@ $ curl -s -u "admin:$GRAFANA_PW" http://127.0.0.1:13000/api/datasources
 $ curl -s -u "admin:$GRAFANA_PW" .../api/datasources/proxy/1/api/v1/query?query=up
   scrape targets up: 11 of 11
 
+# 
+# ===== LOGS: the second pillar, and where Kubernetes' built-in story stops =====
+# container stdout/stderr is collected by the kubelet and served by kubectl logs:
+$ kubectl logs -n session20 deploy/session20-mini --tail=3 2>&1 | head -4; echo '(nginx access log, straight from the container)'
+Found 2 pods, using pod/session20-mini-7d86f7c58c-7m664
+10.244.1.1 - - [07/Oct/2026:17:21:17 +0000] "GET / HTTP/1.1" 200 615 "-" "kube-probe/1.37" "-"
+10.244.1.1 - - [07/Oct/2026:17:21:22 +0000] "GET / HTTP/1.1" 200 615 "-" "kube-probe/1.37" "-"
+10.244.1.1 - - [07/Oct/2026:17:21:27 +0000] "GET / HTTP/1.1" 200 615 "-" "kube-probe/1.37" "-"
+(nginx access log, straight from the container)
+
+# 
+# generate a request so there is something to see:
+$ kubectl logs -n session20 -l app=session20-mini --tail=2 --prefix 2>&1 | tail -3
+[pod/session20-mini-7d86f7c58c-7m664/app] 10.244.1.1 - - [07/Oct/2026:17:21:32 +0000] "GET / HTTP/1.1" 200 615 "-" "kube-probe/1.37" "-"
+[pod/session20-mini-7d86f7c58c-gz6q5/app] 10.244.0.11 - - [07/Oct/2026:17:21:31 +0000] "GET /healthz-probe-test HTTP/1.1" 404 153 "-" "curl/8.10.1" "-"
+[pod/session20-mini-7d86f7c58c-gz6q5/app] 2026/10/07 17:21:31 [error] 30#30: *500 open() "/usr/share/nginx/html/healthz-probe-test" failed (2: No such file or directory), client: 10.244.0.11, server: localhost, request: "GET /healthz-probe-test HTTP/1.1", host: "session20-mini"
+
+# 
+# aggregate across every pod of a Deployment with a label selector:
+$ kubectl logs -n session20 -l app=session20-mini --since=5m --prefix 2>&1 | wc -l | xargs echo '  lines across all pods:'
+  lines across all pods: 20
+
+# 
+# THE LIMIT: kubectl logs only ever sees the CURRENT and PREVIOUS container.
+$ kubectl logs -n session20 deploy/session20-mini --previous 2>&1 | head -2
+Found 2 pods, using pod/session20-mini-7d86f7c58c-7m664
+Error from server (BadRequest): previous terminated container "app" in pod "session20-mini-7d86f7c58c-7m664" not found
+
+# Delete the pod and its logs are gone with it. That is why a production
+# cluster runs a log SHIPPER as a DaemonSet (Fluent Bit / Promtail) that
+# forwards stdout to Loki or Elasticsearch before the pod disappears -
+# exactly the one-pod-per-node pattern from Session 10's node-exporter.
+# 
+# Logs answer WHY; the metrics above answer WHAT. Prometheus deliberately
+# does not store logs - high-cardinality text would destroy it (see
+# observability/README.md). Loki is the log-side counterpart, queried from
+# the same Grafana.
